@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
     # download dataset from https://www.kaggle.com/insaff/massachusetts-roads-dataset
     # extract the zip file, then set the following path according to your system:
-    base = '/media/fabian/data/road_segmentation_ideal'
+    base = '/home/lwt/data/road_segmentation_ideal'
     # this folder should have the training and testing subfolders
 
     # now start the conversion to nnU-Net:

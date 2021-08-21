@@ -53,6 +53,7 @@ def convert_2d_image_to_nifti(input_filename: str, output_filename_truncated: st
             i = i.astype(np.uint32)
 
         itk_img = sitk.GetImageFromArray(i)
+        # ????
         itk_img.SetSpacing(list(spacing)[::-1])
         if not is_seg:
             sitk.WriteImage(itk_img, output_filename_truncated + "_%04.0d.nii.gz" % j)
