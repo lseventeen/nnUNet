@@ -1,0 +1,23 @@
+{
+    "os": "Linux-5.11.0-40-generic-x86_64-with-glibc2.17",
+    "python": "3.8.11",
+    "heartbeatAt": "2021-11-14T10:08:26.923520",
+    "startedAt": "2021-11-14T10:08:25.536664",
+    "docker": null,
+    "gpu": "GeForce RTX 3090",
+    "gpu_count": 7,
+    "cpu_count": 48,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/home/lwt/code/nnUNet/nnunet/run/run_training.py",
+    "git": {
+        "remote": "git@github.com:lseventeen/nnUNet.git",
+        "commit": "6b90d8ec7519afbd47053f10021cc7642d06dea6"
+    },
+    "email": "liuwentao@bupt.edu.cn",
+    "root": "/nas/lcode/code/nnUNet",
+    "host": "AMAX",
+    "username": "lwt",
+    "executable": "/home/lwt/miniconda3/envs/nnunet/bin/python"
+}

@@ -184,7 +184,7 @@ class nnUNetTrainer(NetworkTrainer):
         self.data_aug_params['selected_seg_channels'] = [0]
         self.data_aug_params['patch_size_for_spatialtransform'] = self.patch_size
 
-    def initialize(self, training=True, force_load_plans=False):
+    def initialize(self, training=True, force_load_plans=False,batch_size_custom = None):
         """
         For prediction of test cases just set training=False, this will prevent loading of training data and
         training batchgenerator initialization
@@ -197,7 +197,7 @@ class nnUNetTrainer(NetworkTrainer):
         if force_load_plans or (self.plans is None):
             self.load_plans_file()
 
-        self.process_plans(self.plans)
+        self.process_plans(self.plans,batch_size_custom)
 
         self.setup_DA_params()
 
@@ -332,7 +332,12 @@ class nnUNetTrainer(NetworkTrainer):
         self.plans = plans
 
         stage_plans = self.plans['plans_per_stage'][self.stage]
-        self.batch_size = stage_plans['batch_size']
+        if self.batch_size_custom is not None and self.batch_size_custom > stage_plans['batch_size']:
+            self.batch_size = self.batch_size_custom
+            self.num_batches_per_epoch = 250 // (self.batch_size_custom // stage_plans['batch_size'])
+            self.num_val_batches_per_epoch = 50 // (self.batch_size_custom // stage_plans['batch_size'])
+        else:
+            self.batch_size = stage_plans['batch_size']
         self.net_pool_per_axis = stage_plans['num_pool_per_axis']
         self.patch_size = np.array(stage_plans['patch_size']).astype(int)
         self.do_dummy_2D_aug = stage_plans['do_dummy_2D_data_aug']
@@ -697,7 +702,7 @@ class nnUNetTrainer(NetworkTrainer):
 
             tp_hard = tp_hard.sum(0, keepdim=False).detach().cpu().numpy()
             fp_hard = fp_hard.sum(0, keepdim=False).detach().cpu().numpy()
-            fn_hard = fn_hard.sum(0, keepdim=False).detach().cpu().numpy()
+            fn_hard = fn_hard.sum(0, keepdim=False).detach().cpu().numpy()  
 
             self.online_eval_foreground_dc.append(list((2 * tp_hard) / (2 * tp_hard + fp_hard + fn_hard + 1e-8)))
             self.online_eval_tp.append(list(tp_hard))
@@ -712,9 +717,11 @@ class nnUNetTrainer(NetworkTrainer):
         global_dc_per_class = [i for i in [2 * i / (2 * i + j + k) for i, j, k in
                                            zip(self.online_eval_tp, self.online_eval_fp, self.online_eval_fn)]
                                if not np.isnan(i)]
+        self.average_global_dc = np.mean(global_dc_per_class)
         self.all_val_eval_metrics.append(np.mean(global_dc_per_class))
 
         self.print_to_log_file("Average global foreground Dice:", [np.round(i, 4) for i in global_dc_per_class])
+        self.print_to_log_file("Average all global foreground Dice:", np.round(self.average_global_dc, 4))
         self.print_to_log_file("(interpret this as an estimate for the Dice of the different classes. This is not "
                                "exact.)")
 

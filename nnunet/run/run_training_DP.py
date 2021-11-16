@@ -25,11 +25,16 @@ from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 
 
 def main():
+    CUDA_VISIBLE_DEVICES=3,4,5
     parser = argparse.ArgumentParser()
-    parser.add_argument("network")
-    parser.add_argument("network_trainer")
-    parser.add_argument("task", help="can be task name or task id")
-    parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
+    parser.add_argument("--network", default="3d_fullres")
+    parser.add_argument("--network_trainer", default="nnUNetTrainerV2")
+    parser.add_argument("--task", default="017", help="can be task name or task id")
+    parser.add_argument("--fold", default="5", help='0, 1, ..., 5 or \'all\'')
+    # parser.add_argument("network")
+    # parser.add_argument("network_trainer")
+    # parser.add_argument("task", help="can be task name or task id")
+    # parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
     parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
@@ -45,7 +50,8 @@ def main():
                              "this is not necessary. Deterministic training will make you overfit to some random seed. "
                              "Don't use that.",
                         required=False, default=False, action="store_true")
-    parser.add_argument("-gpus", help="number of gpus", required=True,type=int)
+    # parser.add_argument("-gpus", help="number of gpus", required=True,type=int)
+    parser.add_argument("-gpus", default=3, help="number of gpus", type=int)
     parser.add_argument("--dbs", required=False, default=False, action="store_true", help="distribute batch size. If "
                                                                                           "True then whatever "
                                                                                           "batch_size is in plans will "

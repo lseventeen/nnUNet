@@ -42,16 +42,16 @@ class nnUNetTrainerV2(nnUNetTrainer):
     """
 
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None,
-                 unpack_data=True, deterministic=True, fp16=False):
+                 unpack_data=True, deterministic=True, fp16=False,batch_size_custom=None,task_id = None ):
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
                          deterministic, fp16)
         self.max_num_epochs = 1000
         self.initial_lr = 1e-2
         self.deep_supervision_scales = None
         self.ds_loss_weights = None
-
+        self.batch_size_custom = batch_size_custom
         self.pin_memory = True
-
+        self.task_id = task_id
     def initialize(self, training=True, force_load_plans=False):
         """
         - replaced get_default_augmentation with get_moreDA_augmentation
@@ -308,7 +308,73 @@ class nnUNetTrainerV2(nnUNetTrainer):
                 self.print_to_log_file("The split file contains %d splits." % len(splits))
 
             self.print_to_log_file("Desired fold for training: %d" % self.fold)
-            if self.fold < len(splits):
+            
+            if self.task_id == 17: 
+                tr_keys = np.array(['ABD_005','ABD_006','ABD_007','ABD_009','ABD_010','ABD_021',
+                                                    'ABD_023','ABD_024','ABD_026','ABD_027','ABD_028','ABD_030',
+                                                    'ABD_031','ABD_033','ABD_034','ABD_037','ABD_039','ABD_040'])
+                val_keys = np.array(['ABD_001','ABD_002','ABD_003','ABD_004','ABD_008','ABD_022',
+                                                    'ABD_025','ABD_029','ABD_032','ABD_035','ABD_036','ABD_038'])
+            
+                
+                self.print_to_log_file("FOLD IS NOT USED: This split has %d training and %d validation cases."
+                                       % (len(tr_keys), len(val_keys)))
+            elif self.task_id == 27:
+                tr_keys = splits[self.fold]['train']=np.array(['patient001_frame01', 'patient001_frame12', 'patient004_frame01',
+                                        'patient004_frame15', 'patient005_frame01', 'patient005_frame13',
+                                        'patient006_frame01', 'patient006_frame16', 'patient007_frame01',
+                                        'patient007_frame07', 'patient010_frame01', 'patient010_frame13',
+                                        'patient011_frame01', 'patient011_frame08', 'patient013_frame01',
+                                        'patient013_frame14', 'patient015_frame01', 'patient015_frame10',
+                                        'patient016_frame01', 'patient016_frame12', 'patient018_frame01',
+                                        'patient018_frame10', 'patient019_frame01', 'patient019_frame11',
+                                        'patient020_frame01', 'patient020_frame11', 'patient021_frame01',
+                                        'patient021_frame13', 'patient022_frame01', 'patient022_frame11',
+                                        'patient023_frame01', 'patient023_frame09', 'patient025_frame01',
+                                        'patient025_frame09', 'patient026_frame01', 'patient026_frame12',
+                                        'patient027_frame01', 'patient027_frame11', 'patient028_frame01',
+                                        'patient028_frame09', 'patient029_frame01', 'patient029_frame12',
+                                        'patient030_frame01', 'patient030_frame12', 'patient031_frame01',
+                                        'patient031_frame10', 'patient032_frame01', 'patient032_frame12',
+                                        'patient033_frame01', 'patient033_frame14', 'patient034_frame01',
+                                        'patient034_frame16', 'patient035_frame01', 'patient035_frame11',
+                                        'patient036_frame01', 'patient036_frame12', 'patient037_frame01',
+                                        'patient037_frame12', 'patient038_frame01', 'patient038_frame11',
+                                        'patient039_frame01', 'patient039_frame10', 'patient040_frame01',
+                                        'patient040_frame13', 'patient041_frame01', 'patient041_frame11',
+                                        'patient043_frame01', 'patient043_frame07', 'patient044_frame01',
+                                        'patient044_frame11', 'patient045_frame01', 'patient045_frame13',
+                                        'patient046_frame01', 'patient046_frame10', 'patient047_frame01',
+                                        'patient047_frame09', 'patient050_frame01', 'patient050_frame12',
+                                        'patient051_frame01', 'patient051_frame11', 'patient052_frame01',
+                                        'patient052_frame09', 'patient054_frame01', 'patient054_frame12',
+                                        'patient056_frame01', 'patient056_frame12', 'patient057_frame01',
+                                        'patient057_frame09', 'patient058_frame01', 'patient058_frame14',
+                                        'patient059_frame01', 'patient059_frame09', 'patient060_frame01',
+                                        'patient060_frame14', 'patient061_frame01', 'patient061_frame10',
+                                        'patient062_frame01', 'patient062_frame09', 'patient063_frame01',
+                                        'patient063_frame16', 'patient065_frame01', 'patient065_frame14',
+                                        'patient066_frame01', 'patient066_frame11', 'patient068_frame01',
+                                        'patient068_frame12', 'patient069_frame01', 'patient069_frame12',
+                                        'patient070_frame01', 'patient070_frame10', 'patient071_frame01',
+                                        'patient071_frame09', 'patient072_frame01', 'patient072_frame11',
+                                        'patient073_frame01', 'patient073_frame10', 'patient074_frame01',
+                                        'patient074_frame12', 'patient075_frame01', 'patient075_frame06',
+                                        'patient076_frame01', 'patient076_frame12', 'patient077_frame01',
+                                        'patient077_frame09', 'patient078_frame01', 'patient078_frame09',
+                                        'patient080_frame01', 'patient080_frame10', 'patient082_frame01',
+                                        'patient082_frame07', 'patient083_frame01', 'patient083_frame08',
+                                        'patient084_frame01', 'patient084_frame10', 'patient085_frame01',
+                                        'patient085_frame09', 'patient086_frame01', 'patient086_frame08',
+                                        'patient087_frame01', 'patient087_frame10'])
+                val_keys = splits[self.fold]['val']=np.array(['patient089_frame01', 'patient089_frame10', 'patient090_frame04',
+                                                    'patient090_frame11', 'patient091_frame01', 'patient091_frame09',
+                                                    'patient093_frame01', 'patient093_frame14', 'patient094_frame01',
+                                                    'patient094_frame07', 'patient096_frame01', 'patient096_frame08',
+                                                    'patient097_frame01', 'patient097_frame11', 'patient098_frame01',
+                                                    'patient098_frame09', 'patient099_frame01', 'patient099_frame09',
+                                                    'patient100_frame01', 'patient100_frame13'])
+            elif self.fold < len(splits):
                 tr_keys = splits[self.fold]['train']
                 val_keys = splits[self.fold]['val']
                 self.print_to_log_file("This split has %d training and %d validation cases."

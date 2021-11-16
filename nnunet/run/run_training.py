@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-
+import wandb
 import argparse
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.run.default_configuration import get_default_configuration
@@ -26,11 +26,18 @@ from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 
 
 def main():
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("network")
+    # parser.add_argument("network_trainer")
+    # parser.add_argument("task", help="can be task name or task id")
+    # parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
     parser = argparse.ArgumentParser()
-    parser.add_argument("network")
-    parser.add_argument("network_trainer")
-    parser.add_argument("task", help="can be task name or task id")
-    parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
+    parser.add_argument("--network", default="3d_fullres")
+    parser.add_argument("--network_trainer", default="nnUNetTrainerV2")
+    parser.add_argument("--task", default="017", help="can be task name or task id")
+    parser.add_argument("--fold", default="0", help='0, 1, ..., 5 or \'all\'')
+    parser.add_argument("--wandb_name", default="nnunet")
+    parser.add_argument("-bsc", "--batch_size_custom", default=6)
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
     parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
@@ -91,7 +98,7 @@ def main():
                              'Optional. Beta. Use with caution.')
 
     args = parser.parse_args()
-
+    wandb.init(project=args.task, name=args.wandb_name)
     task = args.task
     fold = args.fold
     network = args.network
@@ -151,7 +158,7 @@ def main():
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
                             deterministic=deterministic,
-                            fp16=run_mixed_precision)
+                            fp16=run_mixed_precision,batch_size_custom = args.batch_size_custom,task_id=task_id)
     if args.disable_saving:
         trainer.save_final_checkpoint = False # whether or not to save the final checkpoint
         trainer.save_best_checkpoint = False  # whether or not to save the best checkpoint according to

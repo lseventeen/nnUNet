@@ -1,0 +1,574 @@
+diff --git a/nnunet/dataset_conversion/Task017_BeyondCranialVaultAbdominalOrganSegmentation.py b/nnunet/dataset_conversion/Task017_BeyondCranialVaultAbdominalOrganSegmentation.py
+index f5cf5ee..6525fb4 100644
+--- a/nnunet/dataset_conversion/Task017_BeyondCranialVaultAbdominalOrganSegmentation.py
++++ b/nnunet/dataset_conversion/Task017_BeyondCranialVaultAbdominalOrganSegmentation.py
+@@ -17,10 +17,10 @@ from collections import OrderedDict
+ from nnunet.paths import nnUNet_raw_data
+ from batchgenerators.utilities.file_and_folder_operations import *
+ import shutil
+-
++import random
+ 
+ if __name__ == "__main__":
+-    base = "/media/yunlu/10TB/research/other_data/Multi-Atlas Labeling Beyond the Cranial Vault/RawData/"
++    base = "/home/lwt/data/synapse/RawData/"
+ 
+     task_id = 17
+     task_name = "AbdominalOrganSegmentation"
+@@ -32,33 +32,49 @@ if __name__ == "__main__":
+     imagestr = join(out_base, "imagesTr")
+     imagests = join(out_base, "imagesTs")
+     labelstr = join(out_base, "labelsTr")
++    labelsts = join(out_base, "labelsTs")
++
++    shutil.rmtree(imagestr)
++    shutil.rmtree(imagests)
++    shutil.rmtree(labelstr)
++    shutil.rmtree(labelsts)
++
+     maybe_mkdir_p(imagestr)
+     maybe_mkdir_p(imagests)
+     maybe_mkdir_p(labelstr)
++    maybe_mkdir_p(labelsts)
+ 
+-    train_folder = join(base, "Training/img")
++    img_folder = join(base, "Training/img")
+     label_folder = join(base, "Training/label")
+-    test_folder = join(base, "Test/img")
+     train_patient_names = []
+     test_patient_names = []
+-    train_patients = subfiles(train_folder, join=False, suffix = 'nii.gz')
++    train_patients = subfiles(img_folder, join=False, suffix = 'nii.gz')
++    test_nums = ['0001', '0002', '0003', '0004', '0008', '0022', '0025', '0029', '0032', '0035', '0036', '0038']
+     for p in train_patients:
+         serial_number = int(p[3:7])
+         train_patient_name = f'{prefix}_{serial_number:03d}.nii.gz'
+         label_file = join(label_folder, f'label{p[3:]}')
+-        image_file = join(train_folder, p)
++        image_file = join(img_folder, p)
+         shutil.copy(image_file, join(imagestr, f'{train_patient_name[:7]}_0000.nii.gz'))
+         shutil.copy(label_file, join(labelstr, train_patient_name))
+         train_patient_names.append(train_patient_name)
+ 
+-    test_patients = subfiles(test_folder, join=False, suffix=".nii.gz")
+-    for p in test_patients:
+-        p = p[:-7]
+-        image_file = join(test_folder, p + ".nii.gz")
+-        serial_number = int(p[3:7])
++    # test_patients = subfiles(test_folder, join=False, suffix=".nii.gz")
++    for p in test_nums:
++        test_patient = f'img{p}.nii.gz'
++        serial_number = int(p)
+         test_patient_name = f'{prefix}_{serial_number:03d}.nii.gz'
++        label_file = join(label_folder, f'label{test_patient[3:]}')
++        image_file = join(img_folder, test_patient)
+         shutil.copy(image_file, join(imagests, f'{test_patient_name[:7]}_0000.nii.gz'))
++        shutil.copy(label_file, join(labelsts, test_patient_name))
+         test_patient_names.append(test_patient_name)
++        # p = p[:-7]
++        # image_file = join(test_folder, p + ".nii.gz")
++        # serial_number = int(p[3:7])
++        # test_patient_name = f'{prefix}_{serial_number:03d}.nii.gz'
++        # shutil.copy(image_file, join(imagests, f'{test_patient_name[:7]}_0000.nii.gz'))
++        # test_patient_names.append(test_patient_name)
+ 
+     json_dict = OrderedDict()
+     json_dict['name'] = "AbdominalOrganSegmentation"
+@@ -88,7 +104,10 @@ if __name__ == "__main__":
+     )
+     json_dict['numTraining'] = len(train_patient_names)
+     json_dict['numTest'] = len(test_patient_names)
+-    json_dict['training'] = [{'image': "./imagesTr/%s" % train_patient_name, "label": "./labelsTr/%s" % train_patient_name} for i, train_patient_name in enumerate(train_patient_names)]
++  
+     json_dict['test'] = ["./imagesTs/%s" % test_patient_name for test_patient_name in test_patient_names]
+ 
++    json_dict['training'] = [{'image': "./imagesTr/%s" % train_patient_name, "label": "./labelsTr/%s" % train_patient_name} for i, train_patient_name in enumerate(train_patient_names)]
++    # json_dict['test'] = [{'image': "./imagesTs/%s" % test_patient_name, "label": "./labelsTs/%s" % test_patient_name} for i, test_patient_name in enumerate(test_patient_names)]
++
+     save_json(json_dict, os.path.join(out_base, "dataset.json"))
+diff --git a/nnunet/dataset_conversion/Task027_AutomaticCardiacDetectionChallenge.py b/nnunet/dataset_conversion/Task027_AutomaticCardiacDetectionChallenge.py
+index 2dface4..ef5bc28 100644
+--- a/nnunet/dataset_conversion/Task027_AutomaticCardiacDetectionChallenge.py
++++ b/nnunet/dataset_conversion/Task027_AutomaticCardiacDetectionChallenge.py
+@@ -33,10 +33,13 @@ def convert_to_submission(source_dir, target_dir):
+ 
+ 
+ if __name__ == "__main__":
+-    folder = "/media/fabian/My Book/datasets/ACDC/training"
+-    folder_test = "/media/fabian/My Book/datasets/ACDC/testing/testing"
+-    out_folder = "/media/fabian/My Book/MedicalDecathlon/MedicalDecathlon_raw_splitted/Task027_ACDC"
+ 
++    foldername = "Task%03.0d_%s" % (task_id, task_name)
++
++    folder = "/home/lwt/data/ACDC/training"
++    folder_test = "/home/lwt/data/ACDC/testing"
++    out_folder = "/home/lwt/data_pro/Task027_ACDC"
++    
+     maybe_mkdir_p(join(out_folder, "imagesTr"))
+     maybe_mkdir_p(join(out_folder, "imagesTs"))
+     maybe_mkdir_p(join(out_folder, "labelsTr"))
+@@ -103,4 +106,4 @@ if __name__ == "__main__":
+         val_patients = patients[val]
+         splits[-1]['val'] = [i[:-12] for i in all_train_files if i[:10] in val_patients]
+ 
+-    save_pickle(splits, "/media/fabian/nnunet/Task027_ACDC/splits_final.pkl")
+\ No newline at end of file
++    save_pickle(splits, join(out_folder, "splits_final.pkl"))
+\ No newline at end of file
+diff --git a/nnunet/experiment_planning/experiment_planner_baseline_3DUNet.py b/nnunet/experiment_planning/experiment_planner_baseline_3DUNet.py
+index 6940565..5939549 100644
+--- a/nnunet/experiment_planning/experiment_planner_baseline_3DUNet.py
++++ b/nnunet/experiment_planning/experiment_planner_baseline_3DUNet.py
+@@ -259,6 +259,7 @@ class ExperimentPlanner(object):
+ 
+         max_spacing_axis = np.argmax(target_spacing)
+         remaining_axes = [i for i in list(range(3)) if i != max_spacing_axis]
++        # ????
+         self.transpose_forward = [max_spacing_axis] + remaining_axes
+         self.transpose_backward = [np.argwhere(np.array(self.transpose_forward) == i)[0][0] for i in range(3)]
+ 
+diff --git a/nnunet/experiment_planning/experiment_planner_baseline_3DUNet_v21.py b/nnunet/experiment_planning/experiment_planner_baseline_3DUNet_v21.py
+index 24faa24..4cfd5fd 100644
+--- a/nnunet/experiment_planning/experiment_planner_baseline_3DUNet_v21.py
++++ b/nnunet/experiment_planning/experiment_planner_baseline_3DUNet_v21.py
+@@ -47,7 +47,6 @@ class ExperimentPlanner3D_v21(ExperimentPlanner):
+         """
+         spacings = self.dataset_properties['all_spacings']
+         sizes = self.dataset_properties['all_sizes']
+-
+         target = np.percentile(np.vstack(spacings), self.target_spacing_percentile, 0)
+ 
+         # This should be used to determine the new median shape. The old implementation is not 100% correct.
+@@ -55,7 +54,9 @@ class ExperimentPlanner3D_v21(ExperimentPlanner):
+         # sizes = [np.array(i) / target * np.array(j) for i, j in zip(spacings, sizes)]
+ 
+         target_size = np.percentile(np.vstack(sizes), self.target_spacing_percentile, 0)
+-        target_size_mm = np.array(target) * np.array(target_size)
++        
++        # target_size_mm = np.array(target) * np.array(target_size)
++
+         # we need to identify datasets for which a different target spacing could be beneficial. These datasets have
+         # the following properties:
+         # - one axis which much lower resolution than the others
+diff --git a/nnunet/experiment_planning/nnUNet_plan_and_preprocess.py b/nnunet/experiment_planning/nnUNet_plan_and_preprocess.py
+index 97bdc11..fb4dd29 100644
+--- a/nnunet/experiment_planning/nnUNet_plan_and_preprocess.py
++++ b/nnunet/experiment_planning/nnUNet_plan_and_preprocess.py
+@@ -28,10 +28,15 @@ def main():
+     import argparse
+ 
+     parser = argparse.ArgumentParser()
+-    parser.add_argument("-t", "--task_ids", nargs="+", help="List of integers belonging to the task ids you wish to run"
++    parser.add_argument("-t", "--task_ids", nargs="+", default=[17], help="List of integers belonging to the task ids you wish to run"
+                                                             " experiment planning and preprocessing for. Each of these "
+                                                             "ids must, have a matching folder 'TaskXXX_' in the raw "
+                                                             "data folder")
++    # parser.add_argument("-t", "--task_ids", nargs="+", default="017", help="List of integers belonging to the task ids you wish to run"
++    #                                                         " experiment planning and preprocessing for. Each of these "
++    #                                                         "ids must, have a matching folder 'TaskXXX_' in the raw "
++    #                                                        "data folder")
++    
+     parser.add_argument("-pl3d", "--planner3d", type=str, default="ExperimentPlanner3D_v21",
+                         help="Name of the ExperimentPlanner class for the full resolution 3D U-Net and U-Net cascade. "
+                              "Default is ExperimentPlanner3D_v21. Can be 'None', in which case these U-Nets will not be "
+@@ -49,7 +54,7 @@ def main():
+     parser.add_argument("-tf", type=int, required=False, default=8,
+                         help="Number of processes used for preprocessing the full resolution data of the 2D U-Net and "
+                              "3D U-Net. Don't overdo it or you will run out of RAM")
+-    parser.add_argument("--verify_dataset_integrity", required=False, default=False, action="store_true",
++    parser.add_argument("--verify_dataset_integrity", required=False, default=True, action="store_true",
+                         help="set this flag to check the dataset integrity. This is useful and should be done once for "
+                              "each dataset!")
+     parser.add_argument("-overwrite_plans", type=str, default=None, required=False,
+diff --git a/nnunet/inference/predict_simple.py b/nnunet/inference/predict_simple.py
+index fd2deb1..6bbf69d 100644
+--- a/nnunet/inference/predict_simple.py
++++ b/nnunet/inference/predict_simple.py
+@@ -27,11 +27,23 @@ def main():
+     parser.add_argument("-i", '--input_folder', help="Must contain all modalities for each patient in the correct"
+                                                      " order (same as training). Files must be named "
+                                                      "CASENAME_XXXX.nii.gz where XXXX is the modality "
+-                                                     "identifier (0000, 0001, etc)", required=True)
+-    parser.add_argument('-o', "--output_folder", required=True, help="folder for saving predictions")
++                                                     "identifier (0000, 0001, etc)", 
++                        default='/home/lwt/data/nnUNet_raw_data_base/nnUNet_raw_data/Task017_AbdominalOrganSegmentation/imagesTs')
++    parser.add_argument('-o', "--output_folder", 
++                        default='/home/lwt/code/nnUNet_trained_models/nnUNet/predict/',
++                        help="folder for saving predictions")
+     parser.add_argument('-t', '--task_name', help='task name or task ID, required.',
+-                        default=default_plans_identifier, required=True)
+-
++                        default="17")
++    # parser.add_argument("-i", '--input_folder', help="Must contain all modalities for each patient in the correct"
++    #                                                  " order (same as training). Files must be named "
++    #                                                  "CASENAME_XXXX.nii.gz where XXXX is the modality "
++    #                                                  "identifier (0000, 0001, etc)", 
++    #                     required=True)
++    # parser.add_argument('-o', "--output_folder", 
++    #                     required=True, 
++    #                     help="folder for saving predictions")
++    # parser.add_argument('-t', '--task_name', help='task name or task ID, required.',
++    #                     default=default_plans_identifier, required=True)
+     parser.add_argument('-tr', '--trainer_class_name',
+                         help='Name of the nnUNetTrainer used for 2D U-Net, full resolution 3D U-Net and low resolution '
+                              'U-Net. The default is %s. If you are running inference with the cascade and the folder '
+@@ -53,9 +65,12 @@ def main():
+     parser.add_argument('-p', '--plans_identifier', help='do not touch this unless you know what you are doing',
+                         default=default_plans_identifier, required=False)
+ 
+-    parser.add_argument('-f', '--folds', nargs='+', default='None',
++    parser.add_argument('-f', '--folds', nargs='+', default=[0],
+                         help="folds to use for prediction. Default is None which means that folds will be detected "
+                              "automatically in the model output folder")
++    # parser.add_argument('-f', '--folds', nargs='+', default='None',
++    #                     help="folds to use for prediction. Default is None which means that folds will be detected "
++    #                          "automatically in the model output folder")
+ 
+     parser.add_argument('-z', '--save_npz', required=False, action='store_true',
+                         help="use this if you want to ensemble these predictions with those of other models. Softmax "
+diff --git a/nnunet/paths.py b/nnunet/paths.py
+index 8fc5af5..82bfba2 100644
+--- a/nnunet/paths.py
++++ b/nnunet/paths.py
+@@ -25,10 +25,14 @@ default_cascade_trainer = "nnUNetTrainerV2CascadeFullRes"
+ """
+ PLEASE READ paths.md FOR INFORMATION TO HOW TO SET THIS UP
+ """
++# base = os.environ['nnUNet_raw_data_base'] if "nnUNet_raw_data_base" in os.environ.keys() else None
++# preprocessing_output_dir = os.environ['nnUNet_preprocessed'] if "nnUNet_preprocessed" in os.environ.keys() else None
++# network_training_output_dir_base = os.path.join(os.environ['RESULTS_FOLDER']) if "RESULTS_FOLDER" in os.environ.keys() else None
+ 
+-base = os.environ['nnUNet_raw_data_base'] if "nnUNet_raw_data_base" in os.environ.keys() else None
+-preprocessing_output_dir = os.environ['nnUNet_preprocessed'] if "nnUNet_preprocessed" in os.environ.keys() else None
+-network_training_output_dir_base = os.path.join(os.environ['RESULTS_FOLDER']) if "RESULTS_FOLDER" in os.environ.keys() else None
++
++base = "/home/lwt/data/nnUNet_raw_data_base"
++preprocessing_output_dir = "/home/lwt/data_pro/nnUNet_preprocessed"
++network_training_output_dir_base = "/home/lwt/code/nnUNet_trained_models"
+ 
+ if base is not None:
+     nnUNet_raw_data = join(base, "nnUNet_raw_data")
+diff --git a/nnunet/run/run_training.py b/nnunet/run/run_training.py
+index b91db3f..27d4444 100644
+--- a/nnunet/run/run_training.py
++++ b/nnunet/run/run_training.py
+@@ -12,7 +12,7 @@
+ #    See the License for the specific language governing permissions and
+ #    limitations under the License.
+ 
+-
++import wandb
+ import argparse
+ from batchgenerators.utilities.file_and_folder_operations import *
+ from nnunet.run.default_configuration import get_default_configuration
+@@ -26,11 +26,18 @@ from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
+ 
+ 
+ def main():
++    # parser = argparse.ArgumentParser()
++    # parser.add_argument("network")
++    # parser.add_argument("network_trainer")
++    # parser.add_argument("task", help="can be task name or task id")
++    # parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
+     parser = argparse.ArgumentParser()
+-    parser.add_argument("network")
+-    parser.add_argument("network_trainer")
+-    parser.add_argument("task", help="can be task name or task id")
+-    parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
++    parser.add_argument("--network", default="3d_fullres")
++    parser.add_argument("--network_trainer", default="nnUNetTrainerV2")
++    parser.add_argument("--task", default="017", help="can be task name or task id")
++    parser.add_argument("--fold", default="0", help='0, 1, ..., 5 or \'all\'')
++    parser.add_argument("--wandb_name", default="nnunet")
++    parser.add_argument("-bsc", "--batch_size_custom", default=6)
+     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
+                         action="store_true")
+     parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
+@@ -91,7 +98,7 @@ def main():
+                              'Optional. Beta. Use with caution.')
+ 
+     args = parser.parse_args()
+-
++    wandb.init(project=args.task, name=args.wandb_name)
+     task = args.task
+     fold = args.fold
+     network = args.network
+@@ -151,7 +158,7 @@ def main():
+     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
+                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
+                             deterministic=deterministic,
+-                            fp16=run_mixed_precision)
++                            fp16=run_mixed_precision,batch_size_custom = args.batch_size_custom,task_id=task_id)
+     if args.disable_saving:
+         trainer.save_final_checkpoint = False # whether or not to save the final checkpoint
+         trainer.save_best_checkpoint = False  # whether or not to save the best checkpoint according to
+diff --git a/nnunet/run/run_training_DP.py b/nnunet/run/run_training_DP.py
+index 922afb5..68c23d4 100644
+--- a/nnunet/run/run_training_DP.py
++++ b/nnunet/run/run_training_DP.py
+@@ -25,11 +25,16 @@ from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
+ 
+ 
+ def main():
++    CUDA_VISIBLE_DEVICES=3,4,5
+     parser = argparse.ArgumentParser()
+-    parser.add_argument("network")
+-    parser.add_argument("network_trainer")
+-    parser.add_argument("task", help="can be task name or task id")
+-    parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
++    parser.add_argument("--network", default="3d_fullres")
++    parser.add_argument("--network_trainer", default="nnUNetTrainerV2")
++    parser.add_argument("--task", default="017", help="can be task name or task id")
++    parser.add_argument("--fold", default="5", help='0, 1, ..., 5 or \'all\'')
++    # parser.add_argument("network")
++    # parser.add_argument("network_trainer")
++    # parser.add_argument("task", help="can be task name or task id")
++    # parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
+     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
+                         action="store_true")
+     parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
+@@ -45,7 +50,8 @@ def main():
+                              "this is not necessary. Deterministic training will make you overfit to some random seed. "
+                              "Don't use that.",
+                         required=False, default=False, action="store_true")
+-    parser.add_argument("-gpus", help="number of gpus", required=True,type=int)
++    # parser.add_argument("-gpus", help="number of gpus", required=True,type=int)
++    parser.add_argument("-gpus", default=3, help="number of gpus", type=int)
+     parser.add_argument("--dbs", required=False, default=False, action="store_true", help="distribute batch size. If "
+                                                                                           "True then whatever "
+                                                                                           "batch_size is in plans will "
+diff --git a/nnunet/training/network_training/network_trainer.py b/nnunet/training/network_training/network_trainer.py
+index a4b78d4..1b52896 100644
+--- a/nnunet/training/network_training/network_trainer.py
++++ b/nnunet/training/network_training/network_trainer.py
+@@ -12,7 +12,7 @@
+ #    See the License for the specific language governing permissions and
+ #    limitations under the License.
+ 
+-
++import wandb 
+ from _warnings import warn
+ from typing import Tuple
+ 
+@@ -110,14 +110,15 @@ class NetworkTrainer(object):
+         self.all_val_losses = []
+         self.all_val_losses_tr_mode = []
+         self.all_val_eval_metrics = []  # does not have to be used
++        self.average_global_dc = 0
+         self.epoch = 0
+         self.log_file = None
+         self.deterministic = deterministic
+ 
+         self.use_progress_bar = False
+-        if 'nnunet_use_progress_bar' in os.environ.keys():
+-            self.use_progress_bar = bool(int(os.environ['nnunet_use_progress_bar']))
+-
++        # if 'nnunet_use_progress_bar' in os.environ.keys():
++        #     self.use_progress_bar = bool(int(os.environ['nnunet_use_progress_bar']))
++        self.use_progress_bar = True
+         ################# Settings for saving checkpoints ##################################
+         self.save_every = 50
+         self.save_latest_only = True  # if false it will not store/overwrite _latest but separate files each
+@@ -447,7 +448,7 @@ class NetworkTrainer(object):
+                     for b in tbar:
+                         tbar.set_description("Epoch {}/{}".format(self.epoch+1, self.max_num_epochs))
+ 
+-                        l = self.run_iteration(self.tr_gen, True)
++                        l = self.run_iteration(self.tr_gen, True, True)
+ 
+                         tbar.set_postfix(loss=l)
+                         train_losses_epoch.append(l)
+@@ -456,7 +457,8 @@ class NetworkTrainer(object):
+                     l = self.run_iteration(self.tr_gen, True)
+                     train_losses_epoch.append(l)
+ 
+-            self.all_tr_losses.append(np.mean(train_losses_epoch))
++            train_loss_mean = np.mean(train_losses_epoch)
++            self.all_tr_losses.append(train_loss_mean)
+             self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
+ 
+             with torch.no_grad():
+@@ -466,7 +468,8 @@ class NetworkTrainer(object):
+                 for b in range(self.num_val_batches_per_epoch):
+                     l = self.run_iteration(self.val_gen, False, True)
+                     val_losses.append(l)
+-                self.all_val_losses.append(np.mean(val_losses))
++                val_loss_mean = np.mean(val_losses)
++                self.all_val_losses.append(val_loss_mean)
+                 self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
+ 
+                 if self.also_val_in_tr_mode:
+@@ -478,13 +481,15 @@ class NetworkTrainer(object):
+                         val_losses.append(l)
+                     self.all_val_losses_tr_mode.append(np.mean(val_losses))
+                     self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
+-
++            
+             self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
+ 
+             continue_training = self.on_epoch_end()
+ 
+             epoch_end_time = time()
+-
++            wandb.log({'train/loss': train_loss_mean,
++                        'val/loss': val_loss_mean,
++                        'val/dice':self.average_global_dc})
+             if not continue_training:
+                 # allows for early stopping
+                 break
+diff --git a/nnunet/training/network_training/nnUNetTrainer.py b/nnunet/training/network_training/nnUNetTrainer.py
+index 41e822d..13495dc 100644
+--- a/nnunet/training/network_training/nnUNetTrainer.py
++++ b/nnunet/training/network_training/nnUNetTrainer.py
+@@ -184,7 +184,7 @@ class nnUNetTrainer(NetworkTrainer):
+         self.data_aug_params['selected_seg_channels'] = [0]
+         self.data_aug_params['patch_size_for_spatialtransform'] = self.patch_size
+ 
+-    def initialize(self, training=True, force_load_plans=False):
++    def initialize(self, training=True, force_load_plans=False,batch_size_custom = None):
+         """
+         For prediction of test cases just set training=False, this will prevent loading of training data and
+         training batchgenerator initialization
+@@ -197,7 +197,7 @@ class nnUNetTrainer(NetworkTrainer):
+         if force_load_plans or (self.plans is None):
+             self.load_plans_file()
+ 
+-        self.process_plans(self.plans)
++        self.process_plans(self.plans,batch_size_custom)
+ 
+         self.setup_DA_params()
+ 
+@@ -332,7 +332,12 @@ class nnUNetTrainer(NetworkTrainer):
+         self.plans = plans
+ 
+         stage_plans = self.plans['plans_per_stage'][self.stage]
+-        self.batch_size = stage_plans['batch_size']
++        if self.batch_size_custom is not None and self.batch_size_custom > stage_plans['batch_size']:
++            self.batch_size = self.batch_size_custom
++            self.num_batches_per_epoch = 250 // (self.batch_size_custom // stage_plans['batch_size'])
++            self.num_val_batches_per_epoch = 50 // (self.batch_size_custom // stage_plans['batch_size'])
++        else:
++            self.batch_size = stage_plans['batch_size']
+         self.net_pool_per_axis = stage_plans['num_pool_per_axis']
+         self.patch_size = np.array(stage_plans['patch_size']).astype(int)
+         self.do_dummy_2D_aug = stage_plans['do_dummy_2D_data_aug']
+@@ -697,7 +702,7 @@ class nnUNetTrainer(NetworkTrainer):
+ 
+             tp_hard = tp_hard.sum(0, keepdim=False).detach().cpu().numpy()
+             fp_hard = fp_hard.sum(0, keepdim=False).detach().cpu().numpy()
+-            fn_hard = fn_hard.sum(0, keepdim=False).detach().cpu().numpy()
++            fn_hard = fn_hard.sum(0, keepdim=False).detach().cpu().numpy()  
+ 
+             self.online_eval_foreground_dc.append(list((2 * tp_hard) / (2 * tp_hard + fp_hard + fn_hard + 1e-8)))
+             self.online_eval_tp.append(list(tp_hard))
+@@ -712,9 +717,11 @@ class nnUNetTrainer(NetworkTrainer):
+         global_dc_per_class = [i for i in [2 * i / (2 * i + j + k) for i, j, k in
+                                            zip(self.online_eval_tp, self.online_eval_fp, self.online_eval_fn)]
+                                if not np.isnan(i)]
++        self.average_global_dc = np.mean(global_dc_per_class)
+         self.all_val_eval_metrics.append(np.mean(global_dc_per_class))
+ 
+         self.print_to_log_file("Average global foreground Dice:", [np.round(i, 4) for i in global_dc_per_class])
++        self.print_to_log_file("Average all global foreground Dice:", np.round(self.average_global_dc, 4))
+         self.print_to_log_file("(interpret this as an estimate for the Dice of the different classes. This is not "
+                                "exact.)")
+ 
+diff --git a/nnunet/training/network_training/nnUNetTrainerV2.py b/nnunet/training/network_training/nnUNetTrainerV2.py
+index e5e77e2..58b3ddf 100644
+--- a/nnunet/training/network_training/nnUNetTrainerV2.py
++++ b/nnunet/training/network_training/nnUNetTrainerV2.py
+@@ -42,16 +42,16 @@ class nnUNetTrainerV2(nnUNetTrainer):
+     """
+ 
+     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None,
+-                 unpack_data=True, deterministic=True, fp16=False):
++                 unpack_data=True, deterministic=True, fp16=False,batch_size_custom=None,task_id = None ):
+         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
+                          deterministic, fp16)
+         self.max_num_epochs = 1000
+         self.initial_lr = 1e-2
+         self.deep_supervision_scales = None
+         self.ds_loss_weights = None
+-
++        self.batch_size_custom = batch_size_custom
+         self.pin_memory = True
+-
++        self.task_id = task_id
+     def initialize(self, training=True, force_load_plans=False):
+         """
+         - replaced get_default_augmentation with get_moreDA_augmentation
+@@ -308,7 +308,73 @@ class nnUNetTrainerV2(nnUNetTrainer):
+                 self.print_to_log_file("The split file contains %d splits." % len(splits))
+ 
+             self.print_to_log_file("Desired fold for training: %d" % self.fold)
+-            if self.fold < len(splits):
++            
++            if self.task_id == 17: 
++                tr_keys = np.array(['ABD_005','ABD_006','ABD_007','ABD_009','ABD_010','ABD_021',
++                                                    'ABD_023','ABD_024','ABD_026','ABD_027','ABD_028','ABD_030',
++                                                    'ABD_031','ABD_033','ABD_034','ABD_037','ABD_039','ABD_040'])
++                val_keys = np.array(['ABD_001','ABD_002','ABD_003','ABD_004','ABD_008','ABD_022',
++                                                    'ABD_025','ABD_029','ABD_032','ABD_035','ABD_036','ABD_038'])
++            
++                
++                self.print_to_log_file("FOLD IS NOT USED: This split has %d training and %d validation cases."
++                                       % (len(tr_keys), len(val_keys)))
++            elif self.task_id == 27:
++                tr_keys = splits[self.fold]['train']=np.array(['patient001_frame01', 'patient001_frame12', 'patient004_frame01',
++                                        'patient004_frame15', 'patient005_frame01', 'patient005_frame13',
++                                        'patient006_frame01', 'patient006_frame16', 'patient007_frame01',
++                                        'patient007_frame07', 'patient010_frame01', 'patient010_frame13',
++                                        'patient011_frame01', 'patient011_frame08', 'patient013_frame01',
++                                        'patient013_frame14', 'patient015_frame01', 'patient015_frame10',
++                                        'patient016_frame01', 'patient016_frame12', 'patient018_frame01',
++                                        'patient018_frame10', 'patient019_frame01', 'patient019_frame11',
++                                        'patient020_frame01', 'patient020_frame11', 'patient021_frame01',
++                                        'patient021_frame13', 'patient022_frame01', 'patient022_frame11',
++                                        'patient023_frame01', 'patient023_frame09', 'patient025_frame01',
++                                        'patient025_frame09', 'patient026_frame01', 'patient026_frame12',
++                                        'patient027_frame01', 'patient027_frame11', 'patient028_frame01',
++                                        'patient028_frame09', 'patient029_frame01', 'patient029_frame12',
++                                        'patient030_frame01', 'patient030_frame12', 'patient031_frame01',
++                                        'patient031_frame10', 'patient032_frame01', 'patient032_frame12',
++                                        'patient033_frame01', 'patient033_frame14', 'patient034_frame01',
++                                        'patient034_frame16', 'patient035_frame01', 'patient035_frame11',
++                                        'patient036_frame01', 'patient036_frame12', 'patient037_frame01',
++                                        'patient037_frame12', 'patient038_frame01', 'patient038_frame11',
++                                        'patient039_frame01', 'patient039_frame10', 'patient040_frame01',
++                                        'patient040_frame13', 'patient041_frame01', 'patient041_frame11',
++                                        'patient043_frame01', 'patient043_frame07', 'patient044_frame01',
++                                        'patient044_frame11', 'patient045_frame01', 'patient045_frame13',
++                                        'patient046_frame01', 'patient046_frame10', 'patient047_frame01',
++                                        'patient047_frame09', 'patient050_frame01', 'patient050_frame12',
++                                        'patient051_frame01', 'patient051_frame11', 'patient052_frame01',
++                                        'patient052_frame09', 'patient054_frame01', 'patient054_frame12',
++                                        'patient056_frame01', 'patient056_frame12', 'patient057_frame01',
++                                        'patient057_frame09', 'patient058_frame01', 'patient058_frame14',
++                                        'patient059_frame01', 'patient059_frame09', 'patient060_frame01',
++                                        'patient060_frame14', 'patient061_frame01', 'patient061_frame10',
++                                        'patient062_frame01', 'patient062_frame09', 'patient063_frame01',
++                                        'patient063_frame16', 'patient065_frame01', 'patient065_frame14',
++                                        'patient066_frame01', 'patient066_frame11', 'patient068_frame01',
++                                        'patient068_frame12', 'patient069_frame01', 'patient069_frame12',
++                                        'patient070_frame01', 'patient070_frame10', 'patient071_frame01',
++                                        'patient071_frame09', 'patient072_frame01', 'patient072_frame11',
++                                        'patient073_frame01', 'patient073_frame10', 'patient074_frame01',
++                                        'patient074_frame12', 'patient075_frame01', 'patient075_frame06',
++                                        'patient076_frame01', 'patient076_frame12', 'patient077_frame01',
++                                        'patient077_frame09', 'patient078_frame01', 'patient078_frame09',
++                                        'patient080_frame01', 'patient080_frame10', 'patient082_frame01',
++                                        'patient082_frame07', 'patient083_frame01', 'patient083_frame08',
++                                        'patient084_frame01', 'patient084_frame10', 'patient085_frame01',
++                                        'patient085_frame09', 'patient086_frame01', 'patient086_frame08',
++                                        'patient087_frame01', 'patient087_frame10'])
++                val_keys = splits[self.fold]['val']=np.array(['patient089_frame01', 'patient089_frame10', 'patient090_frame04',
++                                                    'patient090_frame11', 'patient091_frame01', 'patient091_frame09',
++                                                    'patient093_frame01', 'patient093_frame14', 'patient094_frame01',
++                                                    'patient094_frame07', 'patient096_frame01', 'patient096_frame08',
++                                                    'patient097_frame01', 'patient097_frame11', 'patient098_frame01',
++                                                    'patient098_frame09', 'patient099_frame01', 'patient099_frame09',
++                                                    'patient100_frame01', 'patient100_frame13'])
++            elif self.fold < len(splits):
+                 tr_keys = splits[self.fold]['train']
+                 val_keys = splits[self.fold]['val']
+                 self.print_to_log_file("This split has %d training and %d validation cases."

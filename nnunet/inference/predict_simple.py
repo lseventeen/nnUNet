@@ -27,11 +27,23 @@ def main():
     parser.add_argument("-i", '--input_folder', help="Must contain all modalities for each patient in the correct"
                                                      " order (same as training). Files must be named "
                                                      "CASENAME_XXXX.nii.gz where XXXX is the modality "
-                                                     "identifier (0000, 0001, etc)", required=True)
-    parser.add_argument('-o', "--output_folder", required=True, help="folder for saving predictions")
+                                                     "identifier (0000, 0001, etc)", 
+                        default='/home/lwt/data/nnUNet_raw_data_base/nnUNet_raw_data/Task017_AbdominalOrganSegmentation/imagesTs')
+    parser.add_argument('-o', "--output_folder", 
+                        default='/home/lwt/code/nnUNet_trained_models/nnUNet/predict/',
+                        help="folder for saving predictions")
     parser.add_argument('-t', '--task_name', help='task name or task ID, required.',
-                        default=default_plans_identifier, required=True)
-
+                        default="17")
+    # parser.add_argument("-i", '--input_folder', help="Must contain all modalities for each patient in the correct"
+    #                                                  " order (same as training). Files must be named "
+    #                                                  "CASENAME_XXXX.nii.gz where XXXX is the modality "
+    #                                                  "identifier (0000, 0001, etc)", 
+    #                     required=True)
+    # parser.add_argument('-o', "--output_folder", 
+    #                     required=True, 
+    #                     help="folder for saving predictions")
+    # parser.add_argument('-t', '--task_name', help='task name or task ID, required.',
+    #                     default=default_plans_identifier, required=True)
     parser.add_argument('-tr', '--trainer_class_name',
                         help='Name of the nnUNetTrainer used for 2D U-Net, full resolution 3D U-Net and low resolution '
                              'U-Net. The default is %s. If you are running inference with the cascade and the folder '
@@ -53,9 +65,12 @@ def main():
     parser.add_argument('-p', '--plans_identifier', help='do not touch this unless you know what you are doing',
                         default=default_plans_identifier, required=False)
 
-    parser.add_argument('-f', '--folds', nargs='+', default='None',
+    parser.add_argument('-f', '--folds', nargs='+', default=[0],
                         help="folds to use for prediction. Default is None which means that folds will be detected "
                              "automatically in the model output folder")
+    # parser.add_argument('-f', '--folds', nargs='+', default='None',
+    #                     help="folds to use for prediction. Default is None which means that folds will be detected "
+    #                          "automatically in the model output folder")
 
     parser.add_argument('-z', '--save_npz', required=False, action='store_true',
                         help="use this if you want to ensemble these predictions with those of other models. Softmax "

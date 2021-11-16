@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-
+import wandb 
 from _warnings import warn
 from typing import Tuple
 
@@ -110,14 +110,15 @@ class NetworkTrainer(object):
         self.all_val_losses = []
         self.all_val_losses_tr_mode = []
         self.all_val_eval_metrics = []  # does not have to be used
+        self.average_global_dc = 0
         self.epoch = 0
         self.log_file = None
         self.deterministic = deterministic
 
         self.use_progress_bar = False
-        if 'nnunet_use_progress_bar' in os.environ.keys():
-            self.use_progress_bar = bool(int(os.environ['nnunet_use_progress_bar']))
-
+        # if 'nnunet_use_progress_bar' in os.environ.keys():
+        #     self.use_progress_bar = bool(int(os.environ['nnunet_use_progress_bar']))
+        self.use_progress_bar = True
         ################# Settings for saving checkpoints ##################################
         self.save_every = 50
         self.save_latest_only = True  # if false it will not store/overwrite _latest but separate files each
@@ -447,7 +448,7 @@ class NetworkTrainer(object):
                     for b in tbar:
                         tbar.set_description("Epoch {}/{}".format(self.epoch+1, self.max_num_epochs))
 
-                        l = self.run_iteration(self.tr_gen, True)
+                        l = self.run_iteration(self.tr_gen, True, True)
 
                         tbar.set_postfix(loss=l)
                         train_losses_epoch.append(l)
@@ -456,7 +457,8 @@ class NetworkTrainer(object):
                     l = self.run_iteration(self.tr_gen, True)
                     train_losses_epoch.append(l)
 
-            self.all_tr_losses.append(np.mean(train_losses_epoch))
+            train_loss_mean = np.mean(train_losses_epoch)
+            self.all_tr_losses.append(train_loss_mean)
             self.print_to_log_file("train loss : %.4f" % self.all_tr_losses[-1])
 
             with torch.no_grad():
@@ -466,7 +468,8 @@ class NetworkTrainer(object):
                 for b in range(self.num_val_batches_per_epoch):
                     l = self.run_iteration(self.val_gen, False, True)
                     val_losses.append(l)
-                self.all_val_losses.append(np.mean(val_losses))
+                val_loss_mean = np.mean(val_losses)
+                self.all_val_losses.append(val_loss_mean)
                 self.print_to_log_file("validation loss: %.4f" % self.all_val_losses[-1])
 
                 if self.also_val_in_tr_mode:
@@ -478,13 +481,15 @@ class NetworkTrainer(object):
                         val_losses.append(l)
                     self.all_val_losses_tr_mode.append(np.mean(val_losses))
                     self.print_to_log_file("validation loss (train=True): %.4f" % self.all_val_losses_tr_mode[-1])
-
+            
             self.update_train_loss_MA()  # needed for lr scheduler and stopping of training
 
             continue_training = self.on_epoch_end()
 
             epoch_end_time = time()
-
+            wandb.log({'train/loss': train_loss_mean,
+                        'val/loss': val_loss_mean,
+                        'val/dice':self.average_global_dc})
             if not continue_training:
                 # allows for early stopping
                 break

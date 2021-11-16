@@ -28,10 +28,15 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--task_ids", nargs="+", help="List of integers belonging to the task ids you wish to run"
+    parser.add_argument("-t", "--task_ids", nargs="+", default=[17], help="List of integers belonging to the task ids you wish to run"
                                                             " experiment planning and preprocessing for. Each of these "
                                                             "ids must, have a matching folder 'TaskXXX_' in the raw "
                                                             "data folder")
+    # parser.add_argument("-t", "--task_ids", nargs="+", default="017", help="List of integers belonging to the task ids you wish to run"
+    #                                                         " experiment planning and preprocessing for. Each of these "
+    #                                                         "ids must, have a matching folder 'TaskXXX_' in the raw "
+    #                                                        "data folder")
+    
     parser.add_argument("-pl3d", "--planner3d", type=str, default="ExperimentPlanner3D_v21",
                         help="Name of the ExperimentPlanner class for the full resolution 3D U-Net and U-Net cascade. "
                              "Default is ExperimentPlanner3D_v21. Can be 'None', in which case these U-Nets will not be "
@@ -49,7 +54,7 @@ def main():
     parser.add_argument("-tf", type=int, required=False, default=8,
                         help="Number of processes used for preprocessing the full resolution data of the 2D U-Net and "
                              "3D U-Net. Don't overdo it or you will run out of RAM")
-    parser.add_argument("--verify_dataset_integrity", required=False, default=False, action="store_true",
+    parser.add_argument("--verify_dataset_integrity", required=False, default=True, action="store_true",
                         help="set this flag to check the dataset integrity. This is useful and should be done once for "
                              "each dataset!")
     parser.add_argument("-overwrite_plans", type=str, default=None, required=False,
