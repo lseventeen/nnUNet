@@ -17,8 +17,7 @@ from batchgenerators.utilities.file_and_folder_operations import *
 import shutil
 import numpy as np
 from sklearn.model_selection import KFold
-
-
+from nnunet.paths import nnUNet_raw_data
 def convert_to_submission(source_dir, target_dir):
     niftis = subfiles(source_dir, join=False, suffix=".nii.gz")
     patientids = np.unique([i[:10] for i in niftis])
@@ -34,39 +33,53 @@ def convert_to_submission(source_dir, target_dir):
 
 if __name__ == "__main__":
 
-    foldername = "Task%03.0d_%s" % (task_id, task_name)
 
-    folder = "/home/lwt/data/ACDC/training"
-    folder_test = "/home/lwt/data/ACDC/testing"
-    out_folder = "/home/lwt/data_pro/Task027_ACDC"
+
+    folder_raw = "/home/lwt/data/ACDC/training"
     
-    maybe_mkdir_p(join(out_folder, "imagesTr"))
-    maybe_mkdir_p(join(out_folder, "imagesTs"))
-    maybe_mkdir_p(join(out_folder, "labelsTr"))
+    task_id = 27
+    task_name = "ACDC"
+    foldername = "Task%03.0d_%s" % (task_id, task_name)
+    out_folder = join(nnUNet_raw_data, foldername)
+    test_id = [2,3,8,9,12,14,17,24,42,48,49,53,55,64,67,79,81,88,92,95]
+    val_id = [89,90,91,93,94,96,97,98,99,100]
+    imagestr=join(out_folder, "imagesTr")
+    labelstr=join(out_folder, "labelsTr")
+    imagests=join(out_folder, "imagesTs")
+    labelsts=join(out_folder, "labelsTs")
+    if isdir(imagestr):
+        shutil.rmtree(imagestr)
+        shutil.rmtree(labelstr)
+        shutil.rmtree(imagests)
+        shutil.rmtree(labelsts)
+
+    maybe_mkdir_p(imagestr)
+    maybe_mkdir_p(labelstr)
+    maybe_mkdir_p(imagests)
+    maybe_mkdir_p(labelsts)
 
     # train
     all_train_files = []
-    patient_dirs_train = subfolders(folder, prefix="patient")
-    for p in patient_dirs_train:
-        current_dir = p
-        data_files_train = [i for i in subfiles(current_dir, suffix=".nii.gz") if i.find("_gt") == -1 and i.find("_4d") == -1]
-        corresponding_seg_files = [i[:-7] + "_gt.nii.gz" for i in data_files_train]
-        for d, s in zip(data_files_train, corresponding_seg_files):
-            patient_identifier = d.split("/")[-1][:-7]
-            all_train_files.append(patient_identifier + "_0000.nii.gz")
-            shutil.copy(d, join(out_folder, "imagesTr", patient_identifier + "_0000.nii.gz"))
-            shutil.copy(s, join(out_folder, "labelsTr", patient_identifier + ".nii.gz"))
-
-    # test
     all_test_files = []
-    patient_dirs_test = subfolders(folder_test, prefix="patient")
-    for p in patient_dirs_test:
+    patient_dirs = subfolders(folder_raw, prefix="patient")
+    for p in patient_dirs:
         current_dir = p
-        data_files_test = [i for i in subfiles(current_dir, suffix=".nii.gz") if i.find("_gt") == -1 and i.find("_4d") == -1]
-        for d in data_files_test:
+        data_files = [i for i in subfiles(current_dir, suffix=".nii.gz") if i.find("_gt") == -1 and i.find("_4d") == -1]
+        corresponding_seg_files = [i[:-7] + "_gt.nii.gz" for i in data_files]
+        for d, s in zip(data_files, corresponding_seg_files):
             patient_identifier = d.split("/")[-1][:-7]
-            all_test_files.append(patient_identifier + "_0000.nii.gz")
-            shutil.copy(d, join(out_folder, "imagesTs", patient_identifier + "_0000.nii.gz"))
+            id = int(patient_identifier[7:10])
+            if id in test_id:
+                all_test_files.append(patient_identifier + "_0000.nii.gz")
+                shutil.copy(d, join(out_folder, "imagesTs", patient_identifier + "_0000.nii.gz"))
+                shutil.copy(s, join(out_folder, "labelsTs", patient_identifier + ".nii.gz"))
+            else:
+                all_train_files.append(patient_identifier + "_0000.nii.gz")
+                shutil.copy(d, join(out_folder, "imagesTr", patient_identifier + "_0000.nii.gz"))
+                shutil.copy(s, join(out_folder, "labelsTr", patient_identifier + ".nii.gz"))
+
+
+    
 
 
     json_dict = OrderedDict()
@@ -95,15 +108,7 @@ if __name__ == "__main__":
 
     # create a dummy split (patients need to be separated)
     splits = []
-    patients = np.unique([i[:10] for i in all_train_files])
-    patientids = [i[:-12] for i in all_train_files]
-
-    kf = KFold(5, True, 12345)
-    for tr, val in kf.split(patients):
-        splits.append(OrderedDict())
-        tr_patients = patients[tr]
-        splits[-1]['train'] = [i[:-12] for i in all_train_files if i[:10] in tr_patients]
-        val_patients = patients[val]
-        splits[-1]['val'] = [i[:-12] for i in all_train_files if i[:10] in val_patients]
-
+    splits.append(OrderedDict())  
+    splits[-1]['train'] = [i[:-12] for i in all_train_files if int(i[7:10]) not in val_id]
+    splits[-1]['val'] = [i[:-12] for i in all_train_files if int(i[7:10]) in val_id]
     save_pickle(splits, join(out_folder, "splits_final.pkl"))

@@ -30,10 +30,11 @@ def main():
                                                      "identifier (0000, 0001, etc)", 
                         default='/home/lwt/data/nnUNet_raw_data_base/nnUNet_raw_data/Task017_AbdominalOrganSegmentation/imagesTs')
     parser.add_argument('-o', "--output_folder", 
-                        default='/home/lwt/code/nnUNet_trained_models/nnUNet/predict/',
+                        default='/home/lwt/data/nnUNet_raw_data_base/nnUNet_raw_data/Task017_AbdominalOrganSegmentation/predict',
                         help="folder for saving predictions")
     parser.add_argument('-t', '--task_name', help='task name or task ID, required.',
                         default="17")
+    parser.add_argument("-ei", "--experiment_id", required=False, default="nnunet100_211115180853")
     # parser.add_argument("-i", '--input_folder', help="Must contain all modalities for each patient in the correct"
     #                                                  " order (same as training). Files must be named "
     #                                                  "CASENAME_XXXX.nii.gz where XXXX is the modality "
@@ -233,7 +234,7 @@ def main():
                         num_threads_nifti_save, lowres_segmentations, part_id, num_parts, not disable_tta,
                         overwrite_existing=overwrite_existing, mode=mode, overwrite_all_in_gpu=all_in_gpu,
                         mixed_precision=not args.disable_mixed_precision,
-                        step_size=step_size, checkpoint_name=args.chk)
+                        step_size=step_size, checkpoint_name=args.chk,experiment_id=args.experiment_id)
 
 
 if __name__ == "__main__":

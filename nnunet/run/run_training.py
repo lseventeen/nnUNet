@@ -14,6 +14,7 @@
 
 import wandb
 import argparse
+from datetime import datetime
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.run.default_configuration import get_default_configuration
 from nnunet.paths import default_plans_identifier
@@ -23,25 +24,22 @@ from nnunet.training.network_training.nnUNetTrainer import nnUNetTrainer
 from nnunet.training.network_training.nnUNetTrainerCascadeFullRes import nnUNetTrainerCascadeFullRes
 from nnunet.training.network_training.nnUNetTrainerV2_CascadeFullRes import nnUNetTrainerV2CascadeFullRes
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
-
+# 
 
 def main():
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("network")
-    # parser.add_argument("network_trainer")
-    # parser.add_argument("task", help="can be task name or task id")
-    # parser.add_argument("fold", help='0, 1, ..., 5 or \'all\'')
     parser = argparse.ArgumentParser()
-    parser.add_argument("--network", default="3d_fullres")
-    parser.add_argument("--network_trainer", default="nnUNetTrainerV2")
-    parser.add_argument("--task", default="017", help="can be task name or task id")
+    parser.add_argument("network")
+    parser.add_argument("network_trainer")
+    parser.add_argument("task", help="can be task name or task id")
     parser.add_argument("--fold", default="0", help='0, 1, ..., 5 or \'all\'')
-    parser.add_argument("--wandb_name", default="nnunet")
-    parser.add_argument("-bsc", "--batch_size_custom", default=6)
+    parser.add_argument("--experiment_id", default="nnunet")
+    parser.add_argument("-bsc", "--batch_size_custom", required=False, default=6)
+    parser.add_argument("-eei", "--exist_experiment_id", required=False, default=None)
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
-    parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
-                        action="store_true")
+    parser.add_argument("--wandb_mode", required=False, default="online")
+    # parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
+    #                     action="store_true")
     parser.add_argument("-p", help="plans identifier. Only change this if you created a custom experiment planner",
                         default=default_plans_identifier, required=False)
     parser.add_argument("--use_compressed_data", default=False, action="store_true",
@@ -98,7 +96,8 @@ def main():
                              'Optional. Beta. Use with caution.')
 
     args = parser.parse_args()
-    wandb.init(project=args.task, name=args.wandb_name)
+    experiment_id = f"{args.experiment_id}/{datetime.now().strftime('%y-%m-%d/%H:%M:%S')}" if args.exist_experiment_id is None else args.exist_experiment_id
+    wandb.init(project=args.task, name=experiment_id,tags = ["baseline"],mode =args.wandb_mode)
     task = args.task
     fold = args.fold
     network = args.network
@@ -128,6 +127,8 @@ def main():
 
     if fold == 'all':
         pass
+    elif task_id == 17 or 27:
+        fold = 0
     else:
         fold = int(fold)
 
@@ -158,7 +159,7 @@ def main():
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
                             deterministic=deterministic,
-                            fp16=run_mixed_precision,batch_size_custom = args.batch_size_custom,task_id=task_id)
+                            fp16=run_mixed_precision,batch_size_custom = args.batch_size_custom, experiment_id = experiment_id)
     if args.disable_saving:
         trainer.save_final_checkpoint = False # whether or not to save the final checkpoint
         trainer.save_best_checkpoint = False  # whether or not to save the best checkpoint according to
@@ -173,10 +174,11 @@ def main():
         trainer.find_lr()
     else:
         if not validation_only:
-            if args.continue_training:
+            # if args.continue_training and args.exist_experiment_id is not None:
+            if args.exist_experiment_id is not None:
                 # -c was set, continue a previous training and ignore pretrained weights
                 trainer.load_latest_checkpoint()
-            elif (not args.continue_training) and (args.pretrained_weights is not None):
+            elif (args.exist_experiment_id is None) and (args.pretrained_weights is not None):
                 # we start a new training. If pretrained_weights are set, use them
                 load_pretrained_weights(trainer.network, args.pretrained_weights)
             else:

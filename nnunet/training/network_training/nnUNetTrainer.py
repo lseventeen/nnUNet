@@ -143,11 +143,11 @@ class nnUNetTrainer(NetworkTrainer):
                 assert fold == "all", "if self.fold is a string then it must be \'all\'"
                 if self.output_folder.endswith("%s" % str(self.fold)):
                     self.output_folder = self.output_folder_base
-                self.output_folder = join(self.output_folder, "%s" % str(fold))
+                self.output_folder = join(self.output_folder, "%s" % str(fold),self.experiment_id)
             else:
                 if self.output_folder.endswith("fold_%s" % str(self.fold)):
                     self.output_folder = self.output_folder_base
-                self.output_folder = join(self.output_folder, "fold_%s" % str(fold))
+                self.output_folder = join(self.output_folder, "fold_%s" % str(fold),self.experiment_id)
             self.fold = fold
 
     def setup_DA_params(self):

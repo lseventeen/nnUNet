@@ -33,23 +33,24 @@ if __name__ == "__main__":
     imagests = join(out_base, "imagesTs")
     labelstr = join(out_base, "labelsTr")
     labelsts = join(out_base, "labelsTs")
-
-    shutil.rmtree(imagestr)
-    shutil.rmtree(imagests)
-    shutil.rmtree(labelstr)
-    shutil.rmtree(labelsts)
+    if isdir(imagestr):
+        shutil.rmtree(imagestr)
+        shutil.rmtree(imagests)
+        shutil.rmtree(labelstr)
+        shutil.rmtree(labelsts)
 
     maybe_mkdir_p(imagestr)
     maybe_mkdir_p(imagests)
     maybe_mkdir_p(labelstr)
     maybe_mkdir_p(labelsts)
 
+    val_id = test_id = [1,2,3,4,8,22,25,29,32,35,36,38]
     img_folder = join(base, "Training/img")
     label_folder = join(base, "Training/label")
     train_patient_names = []
     test_patient_names = []
     train_patients = subfiles(img_folder, join=False, suffix = 'nii.gz')
-    test_nums = ['0001', '0002', '0003', '0004', '0008', '0022', '0025', '0029', '0032', '0035', '0036', '0038']
+    
     for p in train_patients:
         serial_number = int(p[3:7])
         train_patient_name = f'{prefix}_{serial_number:03d}.nii.gz'
@@ -57,24 +58,18 @@ if __name__ == "__main__":
         image_file = join(img_folder, p)
         shutil.copy(image_file, join(imagestr, f'{train_patient_name[:7]}_0000.nii.gz'))
         shutil.copy(label_file, join(labelstr, train_patient_name))
-        train_patient_names.append(train_patient_name)
+        train_patient_names.append(train_patient_name)  
 
     # test_patients = subfiles(test_folder, join=False, suffix=".nii.gz")
-    for p in test_nums:
-        test_patient = f'img{p}.nii.gz'
-        serial_number = int(p)
-        test_patient_name = f'{prefix}_{serial_number:03d}.nii.gz'
+    for p in test_id:
+        test_patient = f"img{p:04d}.nii.gz" 
+        test_patient_name = f'{prefix}_{p:03d}.nii.gz'
         label_file = join(label_folder, f'label{test_patient[3:]}')
         image_file = join(img_folder, test_patient)
         shutil.copy(image_file, join(imagests, f'{test_patient_name[:7]}_0000.nii.gz'))
         shutil.copy(label_file, join(labelsts, test_patient_name))
         test_patient_names.append(test_patient_name)
-        # p = p[:-7]
-        # image_file = join(test_folder, p + ".nii.gz")
-        # serial_number = int(p[3:7])
-        # test_patient_name = f'{prefix}_{serial_number:03d}.nii.gz'
-        # shutil.copy(image_file, join(imagests, f'{test_patient_name[:7]}_0000.nii.gz'))
-        # test_patient_names.append(test_patient_name)
+
 
     json_dict = OrderedDict()
     json_dict['name'] = "AbdominalOrganSegmentation"
@@ -111,3 +106,9 @@ if __name__ == "__main__":
     # json_dict['test'] = [{'image': "./imagesTs/%s" % test_patient_name, "label": "./labelsTs/%s" % test_patient_name} for i, test_patient_name in enumerate(test_patient_names)]
 
     save_json(json_dict, os.path.join(out_base, "dataset.json"))
+    
+    splits = []
+    splits.append(OrderedDict())  
+    splits[-1]['train'] = [i[:7] for i in train_patient_names if int(i[4:7]) not in val_id]
+    splits[-1]['val'] = [i[:7] for i in train_patient_names if int(i[4:7]) in val_id]
+    save_pickle(splits, join(out_base, "splits_final.pkl"))

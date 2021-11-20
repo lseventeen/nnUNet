@@ -2,8 +2,11 @@ import glob
 import os
 import SimpleITK as sitk
 import numpy as np
+from batchgenerators.utilities.file_and_folder_operations import *
+
 def read_nii(path):
     return sitk.GetArrayFromImage(sitk.ReadImage(path))
+from nnunet.paths import nnUNet_raw_data
 
 def dice(pred, label):
     if (pred.sum() + label.sum()) == 0:
@@ -28,10 +31,10 @@ def process_label(label):
    
     return spleen,right_kidney,left_kidney,gallbladder,esophagus,liver,stomach,aorta,inferior_vena_cava,portal_vein_splenic_vein,pancreas,right_adrenal_gland,left_adrenal_gland
 
-def test(fold):
-    path='../DATASET/nnFormer_raw/nnFormer_raw_data/Task002_Synapse/'
-    label_list=sorted(glob.glob(os.path.join(path,'labelsTs','*nii.gz')))
-    infer_list=sorted(glob.glob(os.path.join(path,'inferTs',fold,'*nii.gz')))
+def test(data_path):
+    
+    label_list=sorted(glob.glob(os.path.join(data_path,'labelsTs','*nii.gz')))
+    infer_list=sorted(glob.glob(os.path.join(data_path,'predict','*nii.gz')))
     print("loading success...")
     
     Dice_spleen=[]
@@ -48,9 +51,10 @@ def test(fold):
     Dice_right_adrenal_gland=[]
     Dice_left_adrenal_gland=[]
     
-    file=path + 'inferTs/'+fold
-    if not os.path.exists(file):
-        os.makedirs(file)
+    # file=path + 'inferTs/'+fold
+    # if not os.path.exists(file):
+    #     os.makedirs(file)
+    file=os.path.join(data_path,'predict')
     fw = open(file+'/8dice_pre.txt', 'a')
     
     for label_path,infer_path in zip(label_list,infer_list):
@@ -128,5 +132,8 @@ def test(fold):
     print('done')
 
 if __name__ == '__main__':
-    fold='output'
-    test(fold)
+    task_id = 17
+    task_name = "AbdominalOrganSegmentation"
+    foldername = "Task%03.0d_%s" % (task_id, task_name)
+    data_path = join(nnUNet_raw_data, foldername)
+    test(data_path)

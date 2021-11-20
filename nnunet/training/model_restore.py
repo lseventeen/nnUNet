@@ -55,6 +55,10 @@ def restore_model(pkl_file, checkpoint=None, train=False, fp16=None):
     """
     info = load_pickle(pkl_file)
     init = info['init']
+    # init = list(init)
+    # init.append(6)
+    # init.append("nnunet100_211115180853")
+    # init = tuple(init)
     name = info['name']
     search_in = join(nnunet.__path__[0], "training", "network_training")
     tr = recursive_find_python_class([search_in], name, current_module="nnunet.training.network_training")
@@ -106,7 +110,7 @@ def load_best_model_for_inference(folder):
     return restore_model(pkl_file, checkpoint, False)
 
 
-def load_model_and_checkpoint_files(folder, folds=None, mixed_precision=None, checkpoint_name="model_best"):
+def load_model_and_checkpoint_files(folder, folds=None, mixed_precision=None, checkpoint_name="model_best",experiment_id =None):
     """
     used for if you need to ensemble the five models of a cross-validation. This will restore the model from the
     checkpoint in fold 0, load all parameters of the five folds in ram and return both. This will allow for fast
@@ -136,10 +140,13 @@ def load_model_and_checkpoint_files(folder, folds=None, mixed_precision=None, ch
         print("found the following folds: ", folds)
     else:
         raise ValueError("Unknown value for folds. Type: %s. Expected: list of int, int, str or None", str(type(folds)))
-
+    folds = [join(i, experiment_id) for i in folds]
+    
     trainer = restore_model(join(folds[0], "%s.model.pkl" % checkpoint_name), fp16=mixed_precision)
     trainer.output_folder = folder
     trainer.output_folder_base = folder
+    trainer.experiment_id = experiment_id
+
     trainer.update_fold(0)
     trainer.initialize(False)
     all_best_model_files = [join(i, "%s.model" % checkpoint_name) for i in folds]

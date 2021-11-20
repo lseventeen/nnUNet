@@ -487,9 +487,11 @@ class NetworkTrainer(object):
             continue_training = self.on_epoch_end()
 
             epoch_end_time = time()
-            wandb.log({'train/loss': train_loss_mean,
-                        'val/loss': val_loss_mean,
-                        'val/dice':self.average_global_dc})
+            wandb.log({'train_loss': train_loss_mean,
+                        'val_loss': val_loss_mean,
+                        'val_dice':self.average_global_dc,
+                        'lr':self.optimizer.param_groups[0]['lr']},
+                        step = self.epoch)
             if not continue_training:
                 # allows for early stopping
                 break
