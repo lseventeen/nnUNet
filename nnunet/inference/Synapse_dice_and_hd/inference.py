@@ -3,10 +3,10 @@ import os
 import SimpleITK as sitk
 import numpy as np
 from batchgenerators.utilities.file_and_folder_operations import *
-
+from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 def read_nii(path):
     return sitk.GetArrayFromImage(sitk.ReadImage(path))
-from nnunet.paths import nnUNet_raw_data
+from nnunet.paths import nnUNet_raw_data,network_training_output_dir_base
 
 def dice(pred, label):
     if (pred.sum() + label.sum()) == 0:
@@ -31,10 +31,17 @@ def process_label(label):
    
     return spleen,right_kidney,left_kidney,gallbladder,esophagus,liver,stomach,aorta,inferior_vena_cava,portal_vein_splenic_vein,pancreas,right_adrenal_gland,left_adrenal_gland
 
-def test(data_path):
-    
-    label_list=sorted(glob.glob(os.path.join(data_path,'labelsTs','*nii.gz')))
-    infer_list=sorted(glob.glob(os.path.join(data_path,'predict','*nii.gz')))
+def test(pre_path):
+    task_id = 17
+
+
+    # if not task.startswith("Task"):
+    #     task_id = int(task)
+    task = convert_id_to_task_name(task_id)
+    label_path = join(nnUNet_raw_data, task)
+
+    label_list=sorted(glob.glob(os.path.join(label_path,'labelsTs','*nii.gz')))
+    infer_list=sorted(glob.glob(os.path.join(pre_path,'*nii.gz')))
     print("loading success...")
     
     Dice_spleen=[]
@@ -54,8 +61,8 @@ def test(data_path):
     # file=path + 'inferTs/'+fold
     # if not os.path.exists(file):
     #     os.makedirs(file)
-    file=os.path.join(data_path,'predict')
-    fw = open(file+'/8dice_pre.txt', 'a')
+    # file=os.path.join(data_path,'predict')
+    fw = open(pre_path+'/8dice_pre.txt', 'a')
     
     for label_path,infer_path in zip(label_list,infer_list):
         print(label_path.split('/')[-1])
@@ -129,11 +136,18 @@ def test(data_path):
     #dsc.append(np.mean(Dice_right_adrenal_gland))
     #dsc.append(np.mean(Dice_left_adrenal_gland))
     fw.write('DSC:'+str(np.mean(dsc))+'\n')
+
+    print(f"Dice_spleen: f{np.mean(Dice_spleen)}")
+    print(f"Dice_right_kidney: f{np.mean(Dice_right_kidney)}")
+    print(f"Dice_left_kidney: f{np.mean(Dice_left_kidney)}")
+    print(f"Dice_gallbladder: f{np.mean(Dice_gallbladder)}")
+    print(f"Dice_liver: f{np.mean(Dice_liver)}")
+    print(f"Dice_stomach: f{np.mean(Dice_stomach)}")
+    print(f"Dice_aorta: f{np.mean(Dice_aorta)}")
+    print(f"Dice_pancreas: f{np.mean(Dice_pancreas)}")
+    print(f"Dice: f{np.mean(dsc)}")
     print('done')
 
 if __name__ == '__main__':
-    task_id = 17
-    task_name = "AbdominalOrganSegmentation"
-    foldername = "Task%03.0d_%s" % (task_id, task_name)
-    data_path = join(nnUNet_raw_data, foldername)
-    test(data_path)
+    pre_path = "/home/lwt/code/nnUNet_trained_models/nnUNet/3d_fullres/Task017_AbdominalOrganSegmentation/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/nnunet_211123_095445/validation_raw_postprocessed"
+    test(pre_path)

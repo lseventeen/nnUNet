@@ -20,21 +20,13 @@ from nnunet.inference.predict import predict_from_folder
 from nnunet.paths import default_plans_identifier, network_training_output_dir, default_cascade_trainer, default_trainer
 from batchgenerators.utilities.file_and_folder_operations import join, isdir
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
-
+from nnunet.paths import nnUNet_raw_data
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", '--input_folder', help="Must contain all modalities for each patient in the correct"
-                                                     " order (same as training). Files must be named "
-                                                     "CASENAME_XXXX.nii.gz where XXXX is the modality "
-                                                     "identifier (0000, 0001, etc)", 
-                        default='/home/lwt/data/nnUNet_raw_data_base/nnUNet_raw_data/Task017_AbdominalOrganSegmentation/imagesTs')
-    parser.add_argument('-o', "--output_folder", 
-                        default='/home/lwt/data/nnUNet_raw_data_base/nnUNet_raw_data/Task017_AbdominalOrganSegmentation/predict',
-                        help="folder for saving predictions")
     parser.add_argument('-t', '--task_name', help='task name or task ID, required.',
-                        default="17")
-    parser.add_argument("-ei", "--experiment_id", required=False, default="nnunet100_211115180853")
+                        required=True)
+    parser.add_argument("-ei", "--experiment_id", required=True)
     # parser.add_argument("-i", '--input_folder', help="Must contain all modalities for each patient in the correct"
     #                                                  " order (same as training). Files must be named "
     #                                                  "CASENAME_XXXX.nii.gz where XXXX is the modality "
@@ -139,8 +131,8 @@ def main():
                              'that yhis is not recommended (mixed precision is ~2x faster!)')
 
     args = parser.parse_args()
-    input_folder = args.input_folder
-    output_folder = args.output_folder
+    # input_folder = args.input_folder
+    # output_folder = args.output_folder
     part_id = args.part_id
     num_parts = args.num_parts
     folds = args.folds
@@ -165,6 +157,9 @@ def main():
     if not task_name.startswith("Task"):
         task_id = int(task_name)
         task_name = convert_id_to_task_name(task_id)
+
+    input_folder = join(nnUNet_raw_data, task_name,"imagesTs")
+    output_folder = join(nnUNet_raw_data, task_name,"predict")
 
     assert model in ["2d", "3d_lowres", "3d_fullres", "3d_cascade_fullres"], "-m must be 2d, 3d_lowres, 3d_fullres or " \
                                                                              "3d_cascade_fullres"
