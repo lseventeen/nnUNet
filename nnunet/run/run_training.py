@@ -32,12 +32,14 @@ def main():
     parser.add_argument("network_trainer")
     parser.add_argument("task", help="can be task name or task id")
     parser.add_argument("--fold", default="0", help='0, 1, ..., 5 or \'all\'')
-    parser.add_argument("--experiment_id", default="nnunet")
-    parser.add_argument("-bsc", "--batch_size_custom", required=False, default=6)
+    parser.add_argument("-ei","--experiment_id", default="nnunet")
+    parser.add_argument("-cbs", "--custom_batch_size", required=False, default=None,type=int)
+    parser.add_argument("-cps", "--custom_patch_size", required=False, default=None,type=int)
     parser.add_argument("-eei", "--exist_experiment_id", required=False, default=None)
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
-    parser.add_argument("--wandb_mode", required=False, default="online")
+    parser.add_argument("-wm","--wandb_mode", required=False, default="online")
+    parser.add_argument("-cn","--custom_network", required=False, default=None)
     # parser.add_argument("-c", "--continue_training", help="use this if you want to continue a training",
     #                     action="store_true")
     parser.add_argument("-p", help="plans identifier. Only change this if you created a custom experiment planner",
@@ -96,7 +98,7 @@ def main():
                              'Optional. Beta. Use with caution.')
 
     args = parser.parse_args()
-    experiment_id = f"{args.experiment_id}/{datetime.now().strftime('%y-%m-%d/%H:%M:%S')}" if args.exist_experiment_id is None else args.exist_experiment_id
+    experiment_id = f"{args.experiment_id}_{datetime.now().strftime('%y%m%d_%H%M%S')}" if args.exist_experiment_id is None else args.exist_experiment_id
     wandb.init(project=args.task, name=experiment_id,tags = ["baseline"],mode =args.wandb_mode)
     task = args.task
     fold = args.fold
@@ -158,8 +160,9 @@ def main():
 
     trainer = trainer_class(plans_file, fold, output_folder=output_folder_name, dataset_directory=dataset_directory,
                             batch_dice=batch_dice, stage=stage, unpack_data=decompress_data,
-                            deterministic=deterministic,
-                            fp16=run_mixed_precision,batch_size_custom = args.batch_size_custom, experiment_id = experiment_id)
+                            deterministic=deterministic, fp16=run_mixed_precision,custom_batch_size = args.custom_batch_size, 
+                            custom_patch_size = args.custom_patch_size, custom_network= args.custom_network,
+                             experiment_id = experiment_id, task_id = task_id)
     if args.disable_saving:
         trainer.save_final_checkpoint = False # whether or not to save the final checkpoint
         trainer.save_best_checkpoint = False  # whether or not to save the best checkpoint according to

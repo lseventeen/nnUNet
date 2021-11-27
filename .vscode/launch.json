@@ -10,14 +10,18 @@
             "request": "launch",            "program": "${file}",
             "console": "integratedTerminal",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "5"
+                "CUDA_VISIBLE_DEVICES": "6"
             },
             "args": [
                 "3d_fullres",
                 "nnUNetTrainerV2",
                 "017",
                 "--wandb_mode",
-                "offline"
+                "offline",
+                // "-cbs",
+                // "6"
+                "-cn",
+                "nnformer"
             ]
         }
 

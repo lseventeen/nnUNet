@@ -28,7 +28,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--task_ids", nargs="+", default=[17], help="List of integers belonging to the task ids you wish to run"
+    parser.add_argument("-t", "--task_ids", nargs="+", default=[27], help="List of integers belonging to the task ids you wish to run"
                                                             " experiment planning and preprocessing for. Each of these "
                                                             "ids must, have a matching folder 'TaskXXX_' in the raw "
                                                             "data folder")
@@ -147,9 +147,9 @@ def main():
 
 
         maybe_mkdir_p(preprocessing_output_dir_this_task)
-        shutil.copy(join(cropped_out_dir, "dataset_properties.pkl"), preprocessing_output_dir_this_task)
         shutil.copy(join(nnUNet_raw_data, t, "dataset.json"), preprocessing_output_dir_this_task)
-
+        if isfile(join(nnUNet_raw_data, t, "splits_final.pkl")):
+            shutil.copy(join(nnUNet_raw_data, t, "splits_final.pkl"), preprocessing_output_dir_this_task)
         threads = (tl, tf)
 
         print("number of threads: ", threads, "\n")

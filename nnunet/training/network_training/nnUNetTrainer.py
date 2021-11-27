@@ -332,15 +332,30 @@ class nnUNetTrainer(NetworkTrainer):
         self.plans = plans
 
         stage_plans = self.plans['plans_per_stage'][self.stage]
-        if self.batch_size_custom is not None and self.batch_size_custom > stage_plans['batch_size']:
-            self.batch_size = self.batch_size_custom
-            self.num_batches_per_epoch = 250 // (self.batch_size_custom // stage_plans['batch_size'])
-            self.num_val_batches_per_epoch = 50 // (self.batch_size_custom // stage_plans['batch_size'])
+        if self.custom_batch_size is not None and self.custom_batch_size > stage_plans['batch_size']:
+            self.batch_size = self.custom_batch_size
+            self.num_batches_per_epoch = int(self.num_batches_per_epoch // (self.custom_batch_size / stage_plans['batch_size']))
+            self.num_val_batches_per_epoch = int(self.num_val_batches_per_epoch // (self.custom_batch_size / stage_plans['batch_size']))
         else:
             self.batch_size = stage_plans['batch_size']
         self.net_pool_per_axis = stage_plans['num_pool_per_axis']
-        self.patch_size = np.array(stage_plans['patch_size']).astype(int)
+        if self.custom_patch_size is not None:
+            self.patch_size = self.custom_patch_size 
+        elif self.custom_network == "nnformer" and self.task_id == 17:
+            self.patch_size = np.array([64,128,128])
+
+
+        elif self.custom_network == "nnformer" and self.task_id == 27:   
+            self.patch_size = np.array([14,160,160])
+
+            
+        else:
+            self.patch_size = np.array(stage_plans['patch_size']).astype(int)
+
+        self.print_to_log_file(f"\n batch_size : {self.batch_size}\n patch_size : {self.patch_size} \n num_batches_per_epoch : {self.num_batches_per_epoch} \
+                              \n num_val_batches_per_epoch : {self.num_val_batches_per_epoch}")
         self.do_dummy_2D_aug = stage_plans['do_dummy_2D_data_aug']
+        
 
         if 'pool_op_kernel_sizes' not in stage_plans.keys():
             assert 'num_pool_per_axis' in stage_plans.keys()
@@ -356,12 +371,16 @@ class nnUNetTrainer(NetworkTrainer):
                 self.net_num_pool_op_kernel_sizes.append(curr)
         else:
             self.net_num_pool_op_kernel_sizes = stage_plans['pool_op_kernel_sizes']
-
+           
         if 'conv_kernel_sizes' not in stage_plans.keys():
             self.print_to_log_file("WARNING! old plans file with missing conv_kernel_sizes. Attempting to fix it...")
             self.net_conv_kernel_sizes = [[3] * len(self.net_pool_per_axis)] * (max(self.net_pool_per_axis) + 1)
         else:
             self.net_conv_kernel_sizes = stage_plans['conv_kernel_sizes']
+        if self.custom_network == "nnformer" and self.task_id == 17:
+            self.net_num_pool_op_kernel_sizes = [[2,2,2],[2,2,2],[2,2,2],[2,2,2]]
+        if self.custom_network == "nnformer" and self.task_id == 27:
+            self.net_num_pool_op_kernel_sizes = [[1, 2, 2], [1, 2, 2], [2, 2, 2], [2, 2, 2]]
 
         self.pad_all_sides = None  # self.patch_size
         self.intensity_properties = plans['dataset_properties']['intensityproperties']
@@ -692,13 +711,30 @@ class nnUNetTrainer(NetworkTrainer):
             output_seg = output_softmax.argmax(1)
             target = target[:, 0]
             axes = tuple(range(1, len(target.shape)))
-            tp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
-            fp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
-            fn_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
-            for c in range(1, num_classes):
-                tp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target == c).float(), axes=axes)
-                fp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target != c).float(), axes=axes)
-                fn_hard[:, c - 1] = sum_tensor((output_seg != c).float() * (target == c).float(), axes=axes)
+
+
+
+            if self.task_id == 17:
+                tp_hard = torch.zeros((target.shape[0], 8)).to(output_seg.device.index)
+                fp_hard = torch.zeros((target.shape[0], 8)).to(output_seg.device.index)
+                fn_hard = torch.zeros((target.shape[0], 8)).to(output_seg.device.index)
+                i=0
+                for c in range(1, num_classes):
+                    if c in [10,12,13,5,9]:
+                        continue
+                    tp_hard[:, i] = sum_tensor((output_seg == c).float() * (target == c).float(), axes=axes)
+                    fp_hard[:, i] = sum_tensor((output_seg == c).float() * (target != c).float(), axes=axes)
+                    fn_hard[:, i] = sum_tensor((output_seg != c).float() * (target == c).float(), axes=axes)
+                    i+=1
+            else:
+
+                tp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+                fp_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+                fn_hard = torch.zeros((target.shape[0], num_classes - 1)).to(output_seg.device.index)
+                for c in range(1, num_classes):
+                    tp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target == c).float(), axes=axes)
+                    fp_hard[:, c - 1] = sum_tensor((output_seg == c).float() * (target != c).float(), axes=axes)
+                    fn_hard[:, c - 1] = sum_tensor((output_seg != c).float() * (target == c).float(), axes=axes)
 
             tp_hard = tp_hard.sum(0, keepdim=False).detach().cpu().numpy()
             fp_hard = fp_hard.sum(0, keepdim=False).detach().cpu().numpy()

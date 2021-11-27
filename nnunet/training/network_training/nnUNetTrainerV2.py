@@ -23,6 +23,7 @@ from nnunet.training.data_augmentation.data_augmentation_moreDA import get_moreD
 from nnunet.training.loss_functions.deep_supervision import MultipleOutputLoss2
 from nnunet.utilities.to_torch import maybe_to_torch, to_cuda
 from nnunet.network_architecture.generic_UNet import Generic_UNet
+from nnunet.network_architecture.Swin_Unet_l_gelunorm import swintransformer
 from nnunet.network_architecture.initialization import InitWeights_He
 from nnunet.network_architecture.neural_network import SegmentationNetwork
 from nnunet.training.data_augmentation.default_data_augmentation import default_2D_augmentation_params, \
@@ -43,20 +44,23 @@ class nnUNetTrainerV2(nnUNetTrainer):
     """
 
     def __init__(self, plans_file, fold, output_folder=None, dataset_directory=None, batch_dice=True, stage=None,
-                 unpack_data=True, deterministic=True, fp16=False,batch_size_custom=None, experiment_id = None):
+                 unpack_data=True, deterministic=True, fp16=False, experiment_id = None, custom_batch_size=None,custom_patch_size=None,
+                  custom_network=False, task_id = None):
         self.experiment_id = experiment_id
         super().__init__(plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
                          deterministic, fp16)
         self.init_args = (plans_file, fold, output_folder, dataset_directory, batch_dice, stage, unpack_data,
-                          deterministic, fp16, batch_size_custom, experiment_id)
+                          deterministic, fp16,experiment_id, custom_batch_size,custom_patch_size, custom_network, task_id)
         self.max_num_epochs = 1000
         self.initial_lr = 1e-2
         self.deep_supervision_scales = None
         self.ds_loss_weights = None
-        self.pin_memory = True
-        self.batch_size_custom = batch_size_custom
-        
-    def initialize(self, training=True, force_load_plans=False):
+        self.pin_memory = True  
+        self.custom_batch_size = custom_batch_size
+        self.custom_patch_size = custom_patch_size
+        self.custom_network = custom_network
+        self.task_id = task_id
+    def initialize(self, training=True, force_load_plans=False, nnunet=True):
         """
         - replaced get_default_augmentation with get_moreDA_augmentation
         - enforce to only run this code once
@@ -77,9 +81,10 @@ class nnUNetTrainerV2(nnUNetTrainer):
             self.setup_DA_params()
 
             ################# Here we wrap the loss for deep supervision ############
-            # we need to know the number of outputs of the network
+            
+        
             net_numpool = len(self.net_num_pool_op_kernel_sizes)
-
+            
             # we give each output a weight which decreases exponentially (division by 2) as the resolution decreases
             # this gives higher resolution outputs more weight in the loss
             weights = np.array([1 / (2 ** i) for i in range(net_numpool)])
@@ -122,7 +127,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
             else:
                 pass
 
-            self.initialize_network()
+            self.initialize_network(nnunet=nnunet)
             self.initialize_optimizer_and_scheduler()
 
             assert isinstance(self.network, (SegmentationNetwork, nn.DataParallel))
@@ -130,7 +135,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
             self.print_to_log_file('self.was_initialized is True, not running self.initialize again')
         self.was_initialized = True
 
-    def initialize_network(self):
+    def initialize_network(self,nnunet=True):
         """
         - momentum 0.99
         - SGD instead of Adam
@@ -155,15 +160,26 @@ class nnUNetTrainerV2(nnUNetTrainer):
         dropout_op_kwargs = {'p': 0, 'inplace': True}
         net_nonlin = nn.LeakyReLU
         net_nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}
-        self.network = Generic_UNet(self.num_input_channels, self.base_num_features, self.num_classes,
+        if self.custom_network is None:
+            self.network = Generic_UNet(self.num_input_channels, self.base_num_features, self.num_classes,
                                     len(self.net_num_pool_op_kernel_sizes),
                                     self.conv_per_stage, 2, conv_op, norm_op, norm_op_kwargs, dropout_op,
                                     dropout_op_kwargs,
                                     net_nonlin, net_nonlin_kwargs, True, False, lambda x: x, InitWeights_He(1e-2),
                                     self.net_num_pool_op_kernel_sizes, self.net_conv_kernel_sizes, False, True, True)
+        elif self.custom_network == "nnformer":
+            self.network = swintransformer(self.num_input_channels, self.base_num_features, self.num_classes,
+                                    len(self.net_num_pool_op_kernel_sizes),
+                                    self.conv_per_stage, 2, conv_op, norm_op, norm_op_kwargs, dropout_op,
+                                    dropout_op_kwargs,
+                                    net_nonlin, net_nonlin_kwargs, True, False, lambda x: x, InitWeights_He(1e-2),
+                                    self.net_num_pool_op_kernel_sizes, self.net_conv_kernel_sizes, False, True, True)
+            
+        
+                      
         if torch.cuda.is_available():
             self.network.cuda()
-        wandb.watch(self.network)
+        # wandb.watch(self.network)
         self.network.inference_apply_nonlin = softmax_helper
 
     def initialize_optimizer_and_scheduler(self):

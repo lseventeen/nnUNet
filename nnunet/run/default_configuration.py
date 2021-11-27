@@ -18,7 +18,7 @@ from nnunet.paths import network_training_output_dir, preprocessing_output_dir, 
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.experiment_planning.summarize_plans import summarize_plans
 from nnunet.training.model_restore import recursive_find_python_class
-
+import numpy as np
 
 def get_configuration_from_output_folder(folder):
     # split off network_training_output_dir
@@ -45,6 +45,26 @@ def get_default_configuration(network, task, network_trainer, plans_identifier=d
         plans_file = join(preprocessing_output_dir, task, plans_identifier + "_plans_3D.pkl")
 
     plans = load_pickle(plans_file)
+
+# ##################################### CUSTOM PLAN ########################################
+#     if task=='Task027_ACDC' and custom_network == "nnformer":
+#         # plans['plans_per_stage'][0]['batch_size']=4
+#         plans['plans_per_stage'][0]['patch_size']=np.array([14,160,160])
+#         # plans['plans_per_stage'][0]['pool_op_kernel_sizes']=[[1, 2, 2], [1, 2, 2], [2, 2, 2], [2, 2, 2]]
+#         # plans['plans_per_stage'][0]['conv_kernel_sizes']=[[3,3,3],[3,3,3],[3,3,3],[3,3,3],[3,3,3]]
+#         pickle_file = open(plans_file,'wb')
+#         pickle.dump(plans, pickle_file)
+#         pickle_file.close()
+        
+#     elif task=='Task017_AbdominalOrganSegmentation'and custom_network == "nnformer":
+#         # plans['plans_per_stage'][1]['batch_size']=2
+#         plans['plans_per_stage'][1]['patch_size']=np.array([64,128,128])
+#         # plans['plans_per_stage'][1]['pool_op_kernel_sizes']=[[2,2,2],[2,2,2],[2,2,2],[2,2,2]]
+#         # plans['plans_per_stage'][1]['conv_kernel_sizes']=[[3,3,3],[3,3,3],[3,3,3],[3,3,3],[3,3,3]]
+#         pickle_file = open(plans_file,'wb')
+#         pickle.dump(plans, pickle_file)
+#         pickle_file.close()
+# ##################################### CUSTOM PLAN ########################################
     possible_stages = list(plans['plans_per_stage'].keys())
 
     if (network == '3d_cascade_fullres' or network == "3d_lowres") and len(possible_stages) == 1:

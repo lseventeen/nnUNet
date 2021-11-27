@@ -38,7 +38,7 @@ class Mlp(nn.Module):
 def window_partition(x, window_size):
     """
     Args:
-        x: (B, H, W, C)
+        x: (B, S, H, W, C)
         window_size (int): window size
 
     Returns:
@@ -138,7 +138,6 @@ class WindowAttention(nn.Module):
         
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
-        
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.window_size[0] * self.window_size[1] * self.window_size[2],
             self.window_size[0] * self.window_size[1] * self.window_size[2], -1)  
