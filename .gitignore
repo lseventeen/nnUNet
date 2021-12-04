@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 .vscode/
 wandb/
+.wandb/
 # C extensions
 *.so
 @eaDir
