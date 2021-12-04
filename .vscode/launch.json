@@ -20,8 +20,14 @@
                 "offline",
                 // "-cbs",
                 // "6"
-                "-cn",
-                "nnformer"
+                // "-cn",
+                // "nnformer"
+                // "-t",
+                // "17", 
+                // "-ei",
+                // "nnunet_211123_095445",
+                // "-chk",
+                // "model_best"
             ]
         }
 

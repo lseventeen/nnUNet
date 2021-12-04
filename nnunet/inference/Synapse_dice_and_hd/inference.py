@@ -31,12 +31,8 @@ def process_label(label):
    
     return spleen,right_kidney,left_kidney,gallbladder,esophagus,liver,stomach,aorta,inferior_vena_cava,portal_vein_splenic_vein,pancreas,right_adrenal_gland,left_adrenal_gland
 
-def test(pre_path):
+def synapse_inference(pre_path):
     task_id = 17
-
-
-    # if not task.startswith("Task"):
-    #     task_id = int(task)
     task = convert_id_to_task_name(task_id)
     label_path = join(nnUNet_raw_data, task)
 
@@ -149,5 +145,5 @@ def test(pre_path):
     print('done')
 
 if __name__ == '__main__':
-    pre_path = "/home/lwt/code/nnUNet_trained_models/nnUNet/3d_fullres/Task017_AbdominalOrganSegmentation/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/nnunet_211123_095445/validation_raw_postprocessed"
-    test(pre_path)
+    pre_path = "/home/lwt/code/nnUNet_trained_models/nnUNet/3d_fullres/Task017_AbdominalOrganSegmentation/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/nnunet_211123_095445/model_final_checkpoint"
+    synapse_inference(pre_path)

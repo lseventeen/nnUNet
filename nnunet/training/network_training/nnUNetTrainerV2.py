@@ -23,7 +23,8 @@ from nnunet.training.data_augmentation.data_augmentation_moreDA import get_moreD
 from nnunet.training.loss_functions.deep_supervision import MultipleOutputLoss2
 from nnunet.utilities.to_torch import maybe_to_torch, to_cuda
 from nnunet.network_architecture.generic_UNet import Generic_UNet
-from nnunet.network_architecture.Swin_Unet_l_gelunorm import swintransformer
+from nnunet.network_architecture.Swin_Unet_l_gelunorm import synapse_swintransformer
+from nnunet.network_architecture.Swin_Unet_s_ACDC_2laterdown import ACDC_swintransformer
 from nnunet.network_architecture.initialization import InitWeights_He
 from nnunet.network_architecture.neural_network import SegmentationNetwork
 from nnunet.training.data_augmentation.default_data_augmentation import default_2D_augmentation_params, \
@@ -167,8 +168,18 @@ class nnUNetTrainerV2(nnUNetTrainer):
                                     dropout_op_kwargs,
                                     net_nonlin, net_nonlin_kwargs, True, False, lambda x: x, InitWeights_He(1e-2),
                                     self.net_num_pool_op_kernel_sizes, self.net_conv_kernel_sizes, False, True, True)
-        elif self.custom_network == "nnformer":
-            self.network = swintransformer(self.num_input_channels, self.base_num_features, self.num_classes,
+        elif self.custom_network == "nnformer" and self.task_id == 17:
+            self.network = synapse_swintransformer(self.num_input_channels, self.base_num_features, self.num_classes,
+                                    len(self.net_num_pool_op_kernel_sizes),
+                                    self.conv_per_stage, 2, conv_op, norm_op, norm_op_kwargs, dropout_op,
+                                    dropout_op_kwargs,
+                                    net_nonlin, net_nonlin_kwargs, True, False, lambda x: x, InitWeights_He(1e-2),
+                                    self.net_num_pool_op_kernel_sizes, self.net_conv_kernel_sizes, False, True, True)
+            checkpoint = torch.load("./nnformer_model/synapse/pretrain_Synapse.model", map_location='cuda')
+            self.network.load_state_dict(checkpoint['state_dict'])
+            print('I am using the pre_train weight!!') 
+        elif self.custom_network == "nnformer" and self.task_id == 27:
+            self.network = ACDC_swintransformer(self.num_input_channels, self.base_num_features, self.num_classes,
                                     len(self.net_num_pool_op_kernel_sizes),
                                     self.conv_per_stage, 2, conv_op, norm_op, norm_op_kwargs, dropout_op,
                                     dropout_op_kwargs,

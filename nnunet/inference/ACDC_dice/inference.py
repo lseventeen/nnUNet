@@ -5,7 +5,9 @@ import numpy as np
 from medpy.metric import binary
 from sklearn.neighbors import KDTree
 from scipy import ndimage
-
+from batchgenerators.utilities.file_and_folder_operations import *
+from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
+from nnunet.paths import nnUNet_raw_data,network_training_output_dir_base
 
 def read_nii(path):
     itk_img=sitk.ReadImage(path)
@@ -56,10 +58,13 @@ def hd(pred,gt):
 
 
 
-def test(fold):
-    path='../DATASET/nnFormer_raw/nnFormer_raw_data/Task001_ACDC/'
-    label_list=sorted(glob.glob(os.path.join(path,'labelsTs','*nii.gz')))
-    infer_list=sorted(glob.glob(os.path.join(path,'inferTs',fold,'*nii.gz')))
+def ACDC_inference(pre_path):
+    task_id = 27
+    task = convert_id_to_task_name(task_id)
+    label_path = join(nnUNet_raw_data, task)
+    # path='../DATASET/nnFormer_raw/nnFormer_raw_data/Task001_ACDC/'
+    label_list=sorted(glob.glob(os.path.join(label_path,'labelsTs','*nii.gz')))
+    infer_list=sorted(glob.glob(os.path.join(pre_path,'*nii.gz')))
     print("loading success...")
     print(label_list)
     print(infer_list)
@@ -68,10 +73,10 @@ def test(fold):
     Dice_lv=[]
     
 
-    file=path + 'inferTs/'+fold
-    if not os.path.exists(file):
-        os.makedirs(file)
-    fw = open(file+'/dice.txt', 'w')
+    # file=path + 'inferTs/'+fold
+    # if not os.path.exists(file):
+    #     os.makedirs(file)
+    fw = open(pre_path+'/dice.txt', 'w')
     
     for label_path,infer_path in zip(label_list,infer_list):
         print(label_path.split('/')[-1])
@@ -111,8 +116,13 @@ def test(fold):
     
 
     fw.write('DSC:'+str(np.mean(dsc))+'\n')
+
+    print(f"Dice_rv: f{np.mean(np.mean(Dice_rv))}")
+    print(f"Dice_myo: f{np.mean(Dice_myo)}")
+    print(f"Dice_lv: f{np.mean(Dice_lv)}")
+    print(f"Dice: f{np.mean(dsc)}")
     print('done')
 
 if __name__ == '__main__':
-    fold='output'
-    test(fold)
+    pre_path = "/home/lwt/code/nnUNet_trained_models/nnUNet/3d_fullres/Task027_ACDC/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/nnunet_211125_003309/model_best"
+    ACDC_inference(pre_path)

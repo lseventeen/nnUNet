@@ -21,6 +21,8 @@ from nnunet.paths import default_plans_identifier, network_training_output_dir, 
 from batchgenerators.utilities.file_and_folder_operations import join, isdir
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 from nnunet.paths import nnUNet_raw_data
+from nnunet.inference.Synapse_dice_and_hd.inference import synapse_inference
+from nnunet.inference.ACDC_dice.inference import ACDC_inference
 
 def main():
     parser = argparse.ArgumentParser()
@@ -133,6 +135,7 @@ def main():
     args = parser.parse_args()
     # input_folder = args.input_folder
     # output_folder = args.output_folder
+    experiment_id=args.experiment_id
     part_id = args.part_id
     num_parts = args.num_parts
     folds = args.folds
@@ -159,7 +162,8 @@ def main():
         task_name = convert_id_to_task_name(task_id)
 
     input_folder = join(nnUNet_raw_data, task_name,"imagesTs")
-    output_folder = join(nnUNet_raw_data, task_name,"predict")
+    output_folder = join(network_training_output_dir, model, task_name, trainer_class_name + "__" +
+                              args.plans_identifier,"fold_%d" % folds[0], experiment_id,args.chk)
 
     assert model in ["2d", "3d_lowres", "3d_fullres", "3d_cascade_fullres"], "-m must be 2d, 3d_lowres, 3d_fullres or " \
                                                                              "3d_cascade_fullres"
@@ -230,6 +234,10 @@ def main():
                         overwrite_existing=overwrite_existing, mode=mode, overwrite_all_in_gpu=all_in_gpu,
                         mixed_precision=not args.disable_mixed_precision,
                         step_size=step_size, checkpoint_name=args.chk,experiment_id=args.experiment_id)
+    if task_id == 17:
+        synapse_inference(output_folder)
+    elif task_id == 27:
+        ACDC_inference(output_folder)
 
 
 if __name__ == "__main__":
