@@ -248,11 +248,11 @@ class SwinTransformerBlock(nn.Module):
 
         shortcut = x
         x = self.norm1(x)
-        x = x.view(B, H, W, C)
+        x = x.view(B, S, H, W, C)
 
         # cyclic shift
         if self.shift_size > 0:
-            shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size, -self.shift_size), dims=(1, 2))
+            shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size, -self.shift_size), dims=(1, 2, 3))
         else:
             shifted_x = x
 
@@ -286,16 +286,16 @@ class SwinTransformerBlock(nn.Module):
 
     def flops(self):
         flops = 0
-        H, W = self.input_resolution
+        S, H, W = self.input_resolution
         # norm1
-        flops += self.dim * H * W
+        flops += self.dim * S * H * W
         # W-MSA/SW-MSA
-        nW = H * W / self.window_size / self.window_size
-        flops += nW * self.attn.flops(self.window_size * self.window_size)
+        nW = S * H * W / self.window_size / self.window_size / self.window_size
+        flops += nW * self.attn.flops(self.window_size * self.window_size * self.window_size)
         # mlp
-        flops += 2 * H * W * self.dim * self.dim * self.mlp_ratio
+        flops += 2 * S * H * W * self.dim * self.dim * self.mlp_ratio
         # norm2
-        flops += self.dim * H * W
+        flops += self.dim * S * H * W
         return flops
 
 
@@ -317,7 +317,7 @@ class PatchMerging(nn.Module):
 
     def forward(self, x):
         """
-        x: B, H*W, C
+        x: B, S*H*W, C
         """
         S, H, W = self.input_resolution
         B, L, C = x.shape
@@ -567,29 +567,31 @@ class PatchEmbed(nn.Module):
         return flops
 
 class ImageRecover(nn.Module):
-    def __init__(self, input_resolution, dim, dim_scale=4, norm_layer=nn.LayerNorm):
+    def __init__(self, img_size, patch_size, dim, num_classes = None):
         super().__init__()
-        self.input_resolution = input_resolution
+        self.img_size = img_size
+        self.patch_size = patch_size
         self.dim = dim
-        self.dim_scale = dim_scale
-        self.expand = nn.Linear(dim, 16*dim, bias=False)
-        self.output_dim = dim 
-        self.norm = norm_layer(self.output_dim)
-
+        self.num_classes = num_classes
+        self.expand = nn.Linear(dim //(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]), num_classes, bias=False)
+        # self.norm = norm_layer(self.output_dim)
     def forward(self, x):
         """
-        x: B, H*W, C
+        x: B, S*H*W, C
         """
-        S, H, W = self.input_resolution
-        x = self.expand(x)
+        S, H, W = self.img_size[0]//self.patch_size[0], self.img_size[1]//self.patch_size[1], self.img_size[2]//self.patch_size[2]
+        
         B, L, C = x.shape
-        assert L == H * W, "input feature has wrong size"
+        assert L == S * H * W, "input feature has wrong size"
 
-        x = x.view(B, H, W, C)
-        x = rearrange(x, 'b h w (p1 p2 c)-> b (h p1) (w p2) c', p1=self.dim_scale, p2=self.dim_scale, c=C//(self.dim_scale**2))
-        x = x.view(B,-1,self.output_dim)
-        x= self.norm(x)
-
+        x = x.view(B, S, H, W, C)
+        x = rearrange(x, 'b s h w (p1 p2 p3 c)-> b (s p1) (h p2) (w p3) c', 
+                    p1=self.patch_size[0], p2=self.patch_size[1], p3=self.patch_size[2],
+                    c=C//(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]))
+        x = x.view(B,-1,C//(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]))
+        x = self.expand(x).view(B, self.img_size[0], self.img_size[1], self.img_size[2], self.num_classes)
+        # x= self.norm(x)
+    
         return x
 class SwinTransformer_3D(nn.Module):
     r""" Swin Transformer
@@ -679,6 +681,47 @@ class SwinTransformer_3D(nn.Module):
         # self.avgpool = nn.AdaptiveAvgPool1d(1)
         # self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
+         # build decoder layers
+        self.layers_up = nn.ModuleList()
+        self.concat_back_dim = nn.ModuleList()
+        for i_layer in range(self.num_layers):
+            concat_linear = nn.Linear(2*int(embed_dim*2**(self.num_layers-1-i_layer)),
+            int(embed_dim*2**(self.num_layers-1-i_layer))) if i_layer > 0 else nn.Identity()
+            if i_layer ==0 :
+                layer_up = PatchExpand(input_resolution=(patches_resolution[0] // (2 ** (self.num_layers-1-i_layer)),
+                patches_resolution[1] // (2 ** (self.num_layers-1-i_layer))), dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)), dim_scale=2, norm_layer=norm_layer)
+            else:
+                layer_up = BasicLayer_up(dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)),
+                                input_resolution=(patches_resolution[0] // (2 ** (self.num_layers-1-i_layer)),
+                                                    patches_resolution[1] // (2 ** (self.num_layers-1-i_layer))),
+                                depth=depths[(self.num_layers-1-i_layer)],
+                                num_heads=num_heads[(self.num_layers-1-i_layer)],
+                                window_size=window_size,
+                                mlp_ratio=self.mlp_ratio,
+                                qkv_bias=qkv_bias, qk_scale=qk_scale,
+                                drop=drop_rate, attn_drop=attn_drop_rate,
+                                drop_path=dpr[sum(depths[:(self.num_layers-1-i_layer)]):sum(depths[:(self.num_layers-1-i_layer) + 1])],
+                                norm_layer=norm_layer,
+                                upsample=PatchExpand if (i_layer < self.num_layers - 1) else None,
+                                use_checkpoint=use_checkpoint)
+            self.layers_up.append(layer_up)
+            self.concat_back_dim.append(concat_linear)
+
+        # self.norm = norm_layer(self.num_features)
+        self.norm_up= norm_layer(self.embed_dim)
+
+        self.image_recover = ImageRecover(img_size = img_size,patch_size=patch_size, dim = embed_dim, 
+                                         num_classes = num_classes)
+        
+        # self.output = nn.Conv2d(in_channels=embed_dim,out_channels=self.num_classes,kernel_size=1,bias=False)
+
+        self.final=[]
+        for i in range(len(depths)-1):
+            self.final.append(final_patch_expanding(embed_dim*2**i,14,patch_size=patch_size))
+        self.final=nn.ModuleList(self.final)
+
+
+
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -702,17 +745,21 @@ class SwinTransformer_3D(nn.Module):
         x = self.patch_embed(x)
         if self.ape:
             x = x + self.absolute_pos_embed
-        x = self.pos_drop(x)
+        x = self.pos_drop(x)    
+        x_downsample = []
 
         for layer in self.layers:
+            x_downsample.append(x)
             x = layer(x)
 
         x = self.norm(x)  # B L C
         # x = self.avgpool(x.transpose(1, 2))  # B C 1
         # x = torch.flatten(x, 1)
-        return x
+        return x, x_downsample
+       
      #Dencoder and Skip connection
     def forward_up_features(self, x, x_downsample):
+        ds = []
         for inx, layer_up in enumerate(self.layers_up):
             if inx == 0:
                 x = layer_up(x)
@@ -720,26 +767,39 @@ class SwinTransformer_3D(nn.Module):
                 x = torch.cat([x,x_downsample[3-inx]],-1)
                 x = self.concat_back_dim[inx](x)
                 x = layer_up(x)
-
+                ds.append[x]
         x = self.norm_up(x)  # B L C
-  
+        x = self.image_recover(x)
         return x
-    def up_x4(self, x):
-        S, H, W = self.patches_resolution
-        B, L, C = x.shape
-        assert L == S*H*W, "input features has wrong size"
+    # def up_x4(self, x):
+    #     S, H, W = self.patches_resolution
+    #     B, L, C = x.shape
+    #     assert L == S*H*W, "input features has wrong size"
 
-        if self.final_upsample=="expand_first":
-            x = self.up(x)
-            x = x.view(B,4*H,4*W,-1)
-            x = x.permute(0,3,1,2) #B,C,H,W
-            x = self.output(x)
+    #     if self.final_upsample=="expand_first":
+    #         x = self.up(x)
+    #         x = x.view(B,4*H,4*W,-1)
+    #         x = x.permute(0,3,1,2) #B,C,H,W
+    #         x = self.output(x)
             
-        return x
+    #     return x
+
     def forward(self, x):
-        x = self.forward_features(x)
-        x = self.head(x)
+        x, x_downsample = self.forward_features(x)
+        x = self.forward_up_features(x,x_downsample)
+        
+
+        for i in range(len(x)):  
+            seg_outputs.append(self.final[-(i+1)](out[i]))
+            
+        if self._deep_supervision and self.do_ds:
+            return tuple([seg_outputs[-1]] + [i(j) for i, j in
+                                              zip(list(self.upscale_logits_ops)[::-1], seg_outputs[:-1][::-1])])
+        else:
+            
+            return seg_outputs[-1]
         return x
+
 
     def flops(self):
         flops = 0
