@@ -6,9 +6,11 @@
 # --------------------------------------------------------
 
 import torch
+# from torch._C import DoubleTensor
 import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, to_3tuple, trunc_normal_
+from nnunet.network_architecture.neural_network import SegmentationNetwork
 from einops import rearrange
 
 class Mlp(nn.Module):
@@ -325,16 +327,14 @@ class PatchMerging(nn.Module):
         assert S % 2 == 0 and H % 2 == 0 and W % 2 == 0, f"x size ({S}*{H}*{W}) are not even."
 
         x = x.view(B, S, H, W, C)
-        x = rearrange(x, 'b (s p1) (h p2) (w p3) c -> b s h w (p1 p2 p3 c)', p1=2, p2=2, p3=2, c=8 * C)
+        x = rearrange(x, 'b (s p1) (h p2) (w p3) c -> b s h w (p1 p2 p3 c)', p1=2, p2=2, p3=2)
         # x0 = x[:, 0::2, 0::2, 0::2, :]  # B H/2 W/2 C
         # x1 = x[:, 1::2, 0::2, 0::2, :]  # B H/2 W/2 C
         # x2 = x[:, 0::2, 1::2, 0::2, :]  # B H/2 W/2 C
         # x3 = x[:, 1::2, 1::2, :]  # B H/2 W/2 C
         # x = torch.cat([x0, x1, x2, x3], -1)  # B H/2 W/2 4*C
         x = x.view(B, -1, 8 * C)  # B H/2*W/2 4*C
-
-        x = self.norm(x)
-        x = self.reduction(x)
+        x = self.reduction(self.norm(x))
 
         return x
 
@@ -368,10 +368,30 @@ class PatchExpand(nn.Module):
         x = x.view(B, S, H, W, C)
         x = rearrange(x, 'b s h w (p1 p2 p3 c)-> b (s p1) (h p2) (w p3) c', p1=2, p2=2, p3=2, c=C//8)
         x = x.view(B,-1,C//8)
-        x= self.norm(x)
-        x = self.expand(x)
+        x = self.expand(self.norm(x))
         return x
-
+class DeepSupervision(nn.Module):
+    def __init__(self, input_resolution, dim, norm_layer=nn.LayerNorm,num_classes=None):
+        super().__init__()
+        self.input_resolution = input_resolution
+        self.dim = dim
+        # self.expand = nn.Linear(dim // 8, dim//2, bias=False)
+        self.norm = norm_layer(dim)
+        self.proj = nn.Conv3d(dim, num_classes, kernel_size=1, stride=1)
+    def forward(self, x):
+        """
+        x: B, H*W, C
+        """
+        S, H, W = self.input_resolution
+        
+        B, L, C = x.shape
+        assert L == S * H * W, "input feature has wrong size"
+        # assert S % 2 == 0 and H % 2 == 0 and W % 2 == 0, f"x size ({S}*{H}*{W}) are not even."
+        x = self.norm(x)
+        # x = x.view(B, S, H, W, C)
+        x = rearrange(x, 'b (s h w) c -> b c s h w', s=S,h=H,w=W)
+        x = self.proj(x)
+        return x
 class BasicLayer(nn.Module):
     """ A basic Swin Transformer layer for one stage.
 
@@ -465,7 +485,8 @@ class BasicLayer_up(nn.Module):
 
     def __init__(self, dim, input_resolution, depth, num_heads, window_size,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., norm_layer=nn.LayerNorm, upsample=None, use_checkpoint=False):
+                 drop_path=0., norm_layer=nn.LayerNorm, upsample=None, 
+                 use_checkpoint=False,deep_supervision=True,num_classes=None):
 
         super().__init__()
         self.dim = dim
@@ -487,19 +508,26 @@ class BasicLayer_up(nn.Module):
 
         # patch merging layer
         if upsample is not None:
-            self.upsample = PatchExpand(input_resolution, dim=dim, dim_scale=2, norm_layer=norm_layer)
+            self.upsample = upsample(input_resolution, dim=dim, norm_layer=norm_layer)
         else:
             self.upsample = None
-
+        if deep_supervision:
+            self.deep_supervision = deep_supervision(input_resolution, dim=dim, norm_layer=norm_layer,num_classes=num_classes)
     def forward(self, x):
         for blk in self.blocks:
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(blk, x)
             else:
                 x = blk(x)
-        if self.downsample is not None:
-            x = self.downsample(x)
-        return x
+        if self.upsample is not None:
+            up = self.upsample(x)
+        if self.deep_supervision is not None:
+            ds = self.deep_supervision(x)
+        if self.upsample is not None and self.deep_supervision is not None:
+            return up,ds
+        elif self.upsample is None and self.deep_supervision is not None:
+            return x,ds
+       
 
     def extra_repr(self) -> str:
         return f"dim={self.dim}, input_resolution={self.input_resolution}, depth={self.depth}"
@@ -538,8 +566,8 @@ class PatchEmbed(nn.Module):
 
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-        self.expand = nn.Linear(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]*in_chans, embed_dim, bias=False)
-        # self.proj = nn.Conv3d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        # self.expand = nn.Linear(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]*in_chans, embed_dim, bias=False)
+        self.proj = nn.Conv3d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
@@ -550,11 +578,11 @@ class PatchEmbed(nn.Module):
         # FIXME look at relaxing size constraints
         assert S == self.img_size[0] and H == self.img_size[1] and W == self.img_size[2], \
             f"Input image size ({S}*{H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]}*{self.img_size[2]})."
-        x = rearrange(x, 'b c (s p1) (h p2) (w p3)  -> b (p1 p2 p3 c) s h w', 
-                        p1=self.patch_size[0], p2=self.patch_size[1], p3=self.patch_size[2], 
-                        c=self.patch_size[0]*self.patch_size[1]*self.patch_size[2]*C)
-        # x = self.proj(x).flatten(2).transpose(1, 2)  # B Ps*Ph*Pw C
-        x = self.expand(x.flatten(2).transpose(1, 2))  # B Ps*Ph*Pw C
+        # x = rearrange(x, 'b c (s p1) (h p2) (w p3)  -> b (p1 p2 p3 c) s h w', 
+        #                 p1=self.patch_size[0], p2=self.patch_size[1], p3=self.patch_size[2], 
+        #                 c=self.patch_size[0]*self.patch_size[1]*self.patch_size[2]*C)
+        x = self.proj(x).flatten(2).transpose(1, 2)  # B Ps*Ph*Pw C
+        # x = self.expand(x.flatten(2).transpose(1, 2))  # B Ps*Ph*Pw C
         if self.norm is not None:
             x = self.norm(x)
         return x
@@ -567,33 +595,30 @@ class PatchEmbed(nn.Module):
         return flops
 
 class ImageRecover(nn.Module):
-    def __init__(self, img_size, patch_size, dim, num_classes = None):
+    def __init__(self, img_size, patch_size, dim, norm_layer=None,num_classes = None):
         super().__init__()
         self.img_size = img_size
         self.patch_size = patch_size
-        self.dim = dim
-        self.num_classes = num_classes
-        self.expand = nn.Linear(dim //(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]), num_classes, bias=False)
-        # self.norm = norm_layer(self.output_dim)
+        self.norm = norm_layer(dim)
+        # self.expand = nn.Linear(, num_classes, bias=False)
+        self.up_conv = nn.ConvTranspose3d(dim, dim, kernel_size=patch_size, stride=patch_size)
+        self.final_conv = nn.Conv3d(dim, num_classes, kernel_size=1, stride=1)
     def forward(self, x):
         """
         x: B, S*H*W, C
         """
         S, H, W = self.img_size[0]//self.patch_size[0], self.img_size[1]//self.patch_size[1], self.img_size[2]//self.patch_size[2]
-        
         B, L, C = x.shape
         assert L == S * H * W, "input feature has wrong size"
-
-        x = x.view(B, S, H, W, C)
-        x = rearrange(x, 'b s h w (p1 p2 p3 c)-> b (s p1) (h p2) (w p3) c', 
-                    p1=self.patch_size[0], p2=self.patch_size[1], p3=self.patch_size[2],
-                    c=C//(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]))
-        x = x.view(B,-1,C//(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]))
-        x = self.expand(x).view(B, self.img_size[0], self.img_size[1], self.img_size[2], self.num_classes)
-        # x= self.norm(x)
-    
+        x = self.norm(x)
+        x = x.view(B, S, H, W, C).permute(0, 4, 1, 2, 3)
+        # x = rearrange(x, 'b s h w (p1 p2 p3 c)-> b (s p1) (h p2) (w p3) c', 
+        #             p1=self.patch_size[0], p2=self.patch_size[1], p3=self.patch_size[2],
+        #             c=C//(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]))
+        # x = x.view(B,-1,C//(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]))
+        x = self.final_conv((self.up_conv(x)))
         return x
-class SwinTransformer_3D(nn.Module):
+class SwinTransformer_3D(SegmentationNetwork):
     r""" Swin Transformer
         A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
           https://arxiv.org/pdf/2103.14030
@@ -624,13 +649,13 @@ class SwinTransformer_3D(nn.Module):
                  window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False,deep_supervision =False , **kwargs):
+                 use_checkpoint=False,deep_supervision=None , **kwargs):
         super().__init__()
 
         self._deep_supervision = deep_supervision
         self.do_ds = deep_supervision
         self.num_classes=num_classes
-     
+
         self.num_layers = len(depths) # 4
         self.embed_dim = embed_dim
         self.ape = ape
@@ -689,11 +714,13 @@ class SwinTransformer_3D(nn.Module):
             int(embed_dim*2**(self.num_layers-1-i_layer))) if i_layer > 0 else nn.Identity()
             if i_layer ==0 :
                 layer_up = PatchExpand(input_resolution=(patches_resolution[0] // (2 ** (self.num_layers-1-i_layer)),
-                patches_resolution[1] // (2 ** (self.num_layers-1-i_layer))), dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)), dim_scale=2, norm_layer=norm_layer)
+                patches_resolution[1] // (2 ** (self.num_layers-1-i_layer)),patches_resolution[2] // (2 ** (self.num_layers-1-i_layer))), 
+                dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)), norm_layer=norm_layer)
             else:
                 layer_up = BasicLayer_up(dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)),
                                 input_resolution=(patches_resolution[0] // (2 ** (self.num_layers-1-i_layer)),
-                                                    patches_resolution[1] // (2 ** (self.num_layers-1-i_layer))),
+                                                    patches_resolution[1] // (2 ** (self.num_layers-1-i_layer)),
+                                                    patches_resolution[2] // (2 ** (self.num_layers-1-i_layer))),
                                 depth=depths[(self.num_layers-1-i_layer)],
                                 num_heads=num_heads[(self.num_layers-1-i_layer)],
                                 window_size=window_size,
@@ -703,22 +730,23 @@ class SwinTransformer_3D(nn.Module):
                                 drop_path=dpr[sum(depths[:(self.num_layers-1-i_layer)]):sum(depths[:(self.num_layers-1-i_layer) + 1])],
                                 norm_layer=norm_layer,
                                 upsample=PatchExpand if (i_layer < self.num_layers - 1) else None,
-                                use_checkpoint=use_checkpoint)
+                                use_checkpoint=use_checkpoint,
+                                deep_supervision=DeepSupervision if deep_supervision else None,
+                                num_classes=num_classes)
             self.layers_up.append(layer_up)
             self.concat_back_dim.append(concat_linear)
 
-        # self.norm = norm_layer(self.num_features)
-        self.norm_up= norm_layer(self.embed_dim)
+        self.norm = norm_layer(self.num_features)
 
         self.image_recover = ImageRecover(img_size = img_size,patch_size=patch_size, dim = embed_dim, 
-                                         num_classes = num_classes)
+                                         norm_layer=nn.LayerNorm,num_classes = num_classes)
         
         # self.output = nn.Conv2d(in_channels=embed_dim,out_channels=self.num_classes,kernel_size=1,bias=False)
 
-        self.final=[]
-        for i in range(len(depths)-1):
-            self.final.append(final_patch_expanding(embed_dim*2**i,14,patch_size=patch_size))
-        self.final=nn.ModuleList(self.final)
+        # self.final=[]
+        # for i in range(len(depths)-1):
+        #     self.final.append(final_patch_expanding(embed_dim*2**i,14,patch_size=patch_size))
+        # self.final=nn.ModuleList(self.final)
 
 
 
@@ -759,18 +787,18 @@ class SwinTransformer_3D(nn.Module):
        
      #Dencoder and Skip connection
     def forward_up_features(self, x, x_downsample):
-        ds = []
+        out = []
         for inx, layer_up in enumerate(self.layers_up):
             if inx == 0:
                 x = layer_up(x)
             else:
                 x = torch.cat([x,x_downsample[3-inx]],-1)
                 x = self.concat_back_dim[inx](x)
-                x = layer_up(x)
-                ds.append[x]
-        x = self.norm_up(x)  # B L C
+                x, ds = layer_up(x)
+                out.append(ds)
         x = self.image_recover(x)
-        return x
+        out.append(x)
+        return out
     # def up_x4(self, x):
     #     S, H, W = self.patches_resolution
     #     B, L, C = x.shape
@@ -786,19 +814,20 @@ class SwinTransformer_3D(nn.Module):
 
     def forward(self, x):
         x, x_downsample = self.forward_features(x)
-        x = self.forward_up_features(x,x_downsample)
+        ds = self.forward_up_features(x,x_downsample)
         
 
-        for i in range(len(x)):  
-            seg_outputs.append(self.final[-(i+1)](out[i]))
+        # for i in range(len(ds)):  
+        #     seg_outputs.append(self.final[-(i+1)](out[i]))
             
         if self._deep_supervision and self.do_ds:
-            return tuple([seg_outputs[-1]] + [i(j) for i, j in
-                                              zip(list(self.upscale_logits_ops)[::-1], seg_outputs[:-1][::-1])])
+            # return tuple([seg_outputs[-1]] + [i(j) for i, j in
+            #                                   zip(list(self.upscale_logits_ops)[::-1], seg_outputs[:-1][::-1])])
+            return ds[::-1]
         else:
             
-            return seg_outputs[-1]
-        return x
+            return ds[-1]
+        # return x
 
 
     def flops(self):

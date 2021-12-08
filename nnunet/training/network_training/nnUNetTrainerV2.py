@@ -25,6 +25,7 @@ from nnunet.utilities.to_torch import maybe_to_torch, to_cuda
 from nnunet.network_architecture.generic_UNet import Generic_UNet
 from nnunet.network_architecture.Swin_Unet_l_gelunorm import synapse_swintransformer
 from nnunet.network_architecture.Swin_Unet_s_ACDC_2laterdown import ACDC_swintransformer
+from nnunet.network_architecture.Swin_transformer_3D import SwinTransformer_3D
 from nnunet.network_architecture.initialization import InitWeights_He
 from nnunet.network_architecture.neural_network import SegmentationNetwork
 from nnunet.training.data_augmentation.default_data_augmentation import default_2D_augmentation_params, \
@@ -185,8 +186,13 @@ class nnUNetTrainerV2(nnUNetTrainer):
                                     dropout_op_kwargs,
                                     net_nonlin, net_nonlin_kwargs, True, False, lambda x: x, InitWeights_He(1e-2),
                                     self.net_num_pool_op_kernel_sizes, self.net_conv_kernel_sizes, False, True, True)
-            
-        
+        elif self.custom_network == "CTPN" and self.task_id == 17:    
+            self.network = SwinTransformer_3D(img_size=[48,192,192], patch_size=[1,2,2], in_chans=1, num_classes=14,
+                 embed_dim=48, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
+                 window_size=3, mlp_ratio=4., qkv_bias=True, qk_scale=None,
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
+                 norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
+                 use_checkpoint=False,deep_supervision =True)
                       
         if torch.cuda.is_available():
             self.network.cuda()
