@@ -379,6 +379,8 @@ class nnUNetTrainer(NetworkTrainer):
             self.net_conv_kernel_sizes = stage_plans['conv_kernel_sizes']
         if self.custom_network == "nnformer" and self.task_id == 17:
             self.net_num_pool_op_kernel_sizes = [[2,2,2],[2,2,2],[2,2,2],[2,2,2]]
+        if self.custom_network == "CTPN" and self.task_id == 17:
+            self.net_num_pool_op_kernel_sizes = [[2,4,4],[2,2,2],[2,2,2],[2,2,2]]
         if self.custom_network == "nnformer" and self.task_id == 27:
             self.net_num_pool_op_kernel_sizes = [[1, 2, 2], [1, 2, 2], [2, 2, 2], [2, 2, 2]]
 

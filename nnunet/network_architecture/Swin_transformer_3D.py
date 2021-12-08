@@ -42,8 +42,8 @@ def window_partition(x, window_size):
         windows: (num_windows*B, window_size, window_size, window_size, C)
     """
     B, S, H, W, C = x.shape
-    x = x.view(B, S // window_size, window_size, H // window_size, window_size, W // window_size, window_size, C)
-    windows = x.permute(0, 1, 3, 5, 2, 4, 6, 7).contiguous().view(-1, window_size, window_size, window_size, C)
+    x = x.view(B, S // window_size[0], window_size[0], H // window_size[1], window_size[1], W // window_size[2], window_size[2], C)
+    windows = x.permute(0, 1, 3, 5, 2, 4, 6, 7).contiguous().view(-1, window_size[0], window_size[1], window_size[2], C)
     return windows
 
 
@@ -59,8 +59,8 @@ def window_reverse(windows, window_size, S, H, W):
     Returns:
         x: (B, S ,H, W, C)
     """
-    B = int(windows.shape[0] / (S * H * W / window_size / window_size / window_size))
-    x = windows.view(B, S // window_size, H // window_size, W // window_size, window_size, window_size, window_size, -1)
+    B = int(windows.shape[0] / (S * H * W / window_size[0] / window_size[1] / window_size[2]))
+    x = windows.view(B, S // window_size[0], H // window_size[1], W // window_size[2], window_size[0], window_size[1], window_size[2], -1)
     x = x.permute(0, 1, 4, 2, 5, 3, 6, 7).contiguous().view(B, S, H, W, -1)
     return x
 
@@ -198,15 +198,17 @@ class SwinTransformerBlock(nn.Module):
         self.window_size = window_size
         self.shift_size = shift_size # 0 or window_size // 2 
         self.mlp_ratio = mlp_ratio
-        if min(self.input_resolution) <= self.window_size:  # 56,28,14,7 >= 7
-            # if window size is larger than input resolution, we don't partition windows
-            self.shift_size = 0
-            self.window_size = min(self.input_resolution)
-        assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
+    
+        # if min(self.input_resolution) <= min(self.window_size):  # 56,28,14,7 >= 7
+        #     # if window size is larger than input resolution, we don't partition windows
+        #     self.shift_size = 0
+        #     self.window_size = min(self.input_resolution)
+        if self.shift_size != 0:
+            assert 0 <= min(self.shift_size) < min(self.window_size), "shift_size must in 0-window_size"
 
         self.norm1 = norm_layer(dim)
         self.attn = WindowAttention(
-            dim, window_size=to_3tuple(self.window_size), num_heads=num_heads,
+            dim, window_size=self.window_size, num_heads=num_heads,
             qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -214,19 +216,19 @@ class SwinTransformerBlock(nn.Module):
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
-        if self.shift_size > 0:
+        if max(self.shift_size) > 0:
             # calculate attention mask for SW-MSA
             S, H, W = self.input_resolution
             img_mask = torch.zeros((1, S, H, W, 1))  # 1 H W 1
-            s_slices = (slice(0, -self.window_size),
-                        slice(-self.window_size, -self.shift_size),
-                        slice(-self.shift_size, None))
-            h_slices = (slice(0, -self.window_size),
-                        slice(-self.window_size, -self.shift_size),
-                        slice(-self.shift_size, None))
-            w_slices = (slice(0, -self.window_size),
-                        slice(-self.window_size, -self.shift_size),
-                        slice(-self.shift_size, None))
+            s_slices = (slice(0, -self.window_size[0]),
+                        slice(-self.window_size[0], -self.shift_size[0]),
+                        slice(-self.shift_size[0], None))
+            h_slices = (slice(0, -self.window_size[1]),
+                        slice(-self.window_size[1], -self.shift_size[1]),
+                        slice(-self.shift_size[1], None))
+            w_slices = (slice(0, -self.window_size[2]),
+                        slice(-self.window_size[2], -self.shift_size[2]),
+                        slice(-self.shift_size[2], None))
             cnt = 0
             for s in s_slices:
                 for h in h_slices:
@@ -235,7 +237,7 @@ class SwinTransformerBlock(nn.Module):
                         cnt += 1
 
             mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, window_size, 1
-            mask_windows = mask_windows.view(-1, self.window_size * self.window_size * self.window_size)
+            mask_windows = mask_windows.view(-1, self.window_size[0] * self.window_size[1] * self.window_size[2])
             attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
             attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
         else:
@@ -253,25 +255,25 @@ class SwinTransformerBlock(nn.Module):
         x = x.view(B, S, H, W, C)
 
         # cyclic shift
-        if self.shift_size > 0:
-            shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size, -self.shift_size), dims=(1, 2, 3))
+        if max(self.shift_size) > 0:
+            shifted_x = torch.roll(x, shifts=(-self.shift_size[0], -self.shift_size[1], -self.shift_size[2]), dims=(1, 2, 3))
         else:
             shifted_x = x
 
         # partition windows
         x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
-        x_windows = x_windows.view(-1, self.window_size * self.window_size * self.window_size, C)  # nW*B, window_size*window_size*window_size, C
+        x_windows = x_windows.view(-1, self.window_size[0] * self.window_size[1] * self.window_size[2], C)  # nW*B, window_size*window_size*window_size, C
 
         # W-MSA/SW-MSA
         attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
 
         # merge windows
-        attn_windows = attn_windows.view(-1, self.window_size, self.window_size, self.window_size, C)
+        attn_windows = attn_windows.view(-1, self.window_size[0], self.window_size[1], self.window_size[2], C)
         shifted_x = window_reverse(attn_windows, self.window_size, S, H, W)  # B H' W' C
 
         # reverse cyclic shift
-        if self.shift_size > 0:
-            x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size, self.shift_size), dims=(1, 2, 3))
+        if max(self.shift_size) > 0:
+            x = torch.roll(shifted_x, shifts=(self.shift_size[0], self.shift_size[1], self.shift_size[2]), dims=(1, 2, 3))
         else:
             x = shifted_x
         x = x.view(B, S * H * W, C)
@@ -363,7 +365,6 @@ class PatchExpand(nn.Module):
         
         B, L, C = x.shape
         assert L == S * H * W, "input feature has wrong size"
-        assert S % 2 == 0 and H % 2 == 0 and W % 2 == 0, f"x size ({S}*{H}*{W}) are not even."
         
         x = x.view(B, S, H, W, C)
         x = rearrange(x, 'b s h w (p1 p2 p3 c)-> b (s p1) (h p2) (w p3) c', p1=2, p2=2, p3=2, c=C//8)
@@ -426,7 +427,7 @@ class BasicLayer(nn.Module):
         self.blocks = nn.ModuleList([
             SwinTransformerBlock(dim=dim, input_resolution=input_resolution,
                                  num_heads=num_heads, window_size=window_size,
-                                 shift_size=0 if (i % 2 == 0) else window_size // 2,
+                                 shift_size=[0,0,0] if (i % 2 == 0) else [window_size[0] // 2,window_size[1] // 2,window_size[2] // 2],
                                  mlp_ratio=mlp_ratio,
                                  qkv_bias=qkv_bias, qk_scale=qk_scale,
                                  drop=drop, attn_drop=attn_drop,
@@ -498,7 +499,7 @@ class BasicLayer_up(nn.Module):
         self.blocks = nn.ModuleList([
             SwinTransformerBlock(dim=dim, input_resolution=input_resolution,
                                  num_heads=num_heads, window_size=window_size,
-                                 shift_size=0 if (i % 2 == 0) else window_size // 2,
+                                 shift_size=[0,0,0] if (i % 2 == 0) else [window_size[0] // 2,window_size[1] // 2,window_size[2] // 2],
                                  mlp_ratio=mlp_ratio,
                                  qkv_bias=qkv_bias, qk_scale=qk_scale,
                                  drop=drop, attn_drop=attn_drop,
@@ -553,7 +554,7 @@ class PatchEmbed(nn.Module):
         norm_layer (nn.Module, optional): Normalization layer. Default: None
     """
 
-    def __init__(self, img_size=[192,192,48], patch_size=[1,2,2], in_chans=1, embed_dim=96, norm_layer=None):
+    def __init__(self, img_size=[192,192,48], patch_size=[2,4,4], in_chans=1, embed_dim=96, norm_layer=None):
         super().__init__()
         # img_size = to_tuple(img_size)
         # patch_size = to_3tuple(patch_size)
@@ -561,13 +562,13 @@ class PatchEmbed(nn.Module):
         self.img_size = img_size
         self.patch_size = patch_size
         self.patches_resolution = patches_resolution
-        # 192//2 * 192//2 * 48
+        # 192//4 * 192//4 * 48//2
         self.num_patches = patches_resolution[0] * patches_resolution[1]*patches_resolution[2]
 
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-        # self.expand = nn.Linear(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]*in_chans, embed_dim, bias=False)
         self.proj = nn.Conv3d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        # self.proj2 = nn.Conv3d(embed_dim, embed_dim, kernel_size=[2,2,2], stride=[2,2,2])
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
