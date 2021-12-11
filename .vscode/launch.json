@@ -20,8 +20,8 @@
                 "offline",
                 // "-cbs",
                 // "6"
-                "-cn",
-                "CTPN"
+                // "-cn",
+                // "CTPN"
                 // "nnformer"
                 // "-t",
                 // "17", 

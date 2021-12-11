@@ -188,11 +188,11 @@ class nnUNetTrainerV2(nnUNetTrainer):
                                     self.net_num_pool_op_kernel_sizes, self.net_conv_kernel_sizes, False, True, True)
         elif self.custom_network == "CTPN" and self.task_id == 17:    
             self.network = SwinTransformer_3D(img_size=[48,192,192], patch_size=[2,4,4], in_chans=1, num_classes=14,
-                 embed_dim=96, depths=[2, 2, 6, 2], num_heads=[3, 6, 12, 24],
+                 embed_dim=192, depths=[2, 2, 2, 2], num_heads=[6, 12, 24, 48],
                  window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False,deep_supervision =True)
+                 use_checkpoint=False,deep_supervision =True, conv_op=conv_op)
                       
         if torch.cuda.is_available():
             self.network.cuda()

@@ -4,10 +4,11 @@ import SimpleITK as sitk
 import numpy as np
 from batchgenerators.utilities.file_and_folder_operations import *
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
+from batchgenerators.utilities.file_and_folder_operations import join, isdir
 def read_nii(path):
     return sitk.GetArrayFromImage(sitk.ReadImage(path))
 from nnunet.paths import nnUNet_raw_data,network_training_output_dir_base
-
+import pandas as pd
 def dice(pred, label):
     if (pred.sum() + label.sum()) == 0:
         return 1
@@ -31,7 +32,7 @@ def process_label(label):
    
     return spleen,right_kidney,left_kidney,gallbladder,esophagus,liver,stomach,aorta,inferior_vena_cava,portal_vein_splenic_vein,pancreas,right_adrenal_gland,left_adrenal_gland
 
-def synapse_inference(pre_path):
+def synapse_inference(pre_path,experiment_id):
     task_id = 17
     task = convert_id_to_task_name(task_id)
     label_path = join(nnUNet_raw_data, task)
@@ -99,51 +100,71 @@ def synapse_inference(pre_path):
         fw.write('Dice_right_adrenal_gland: {:.4f}\n'.format(Dice_right_adrenal_gland[-1]))
         fw.write('Dice_left_adrenal_gland: {:.4f}\n'.format(Dice_left_adrenal_gland[-1]))
         fw.write('*'*20+'\n')
-    
+    Dice_spleen = np.mean(Dice_spleen)
+    Dice_right_kidney = np.mean(Dice_right_kidney)
+    Dice_left_kidney = np.mean(Dice_left_kidney)
+    Dice_gallbladder = np.mean(Dice_gallbladder)
+    Dice_esophagus = np.mean(Dice_esophagus)
+    Dice_liver = np.mean(Dice_liver)
+    Dice_stomach = np.mean(Dice_stomach)
+    Dice_aorta = np.mean(Dice_aorta)
+    Dice_inferior_vena_cava = np.mean(Dice_inferior_vena_cava)
+    Dice_portal_vein_splenic_vein = np.mean(Dice_portal_vein_splenic_vein)
+    Dice_pancreas = np.mean(Dice_pancreas)
+    Dice_right_adrenal_gland = np.mean(Dice_right_adrenal_gland)
+    Dice_left_adrenal_gland = np.mean(Dice_left_adrenal_gland)
     fw.write('*'*20+'\n')
     fw.write('Mean_Dice\n')
-    fw.write('Dice_spleen'+str(np.mean(Dice_spleen))+'\n')
-    fw.write('Dice_right_kidney'+str(np.mean(Dice_right_kidney))+'\n')
-    fw.write('Dice_left_kidney'+str(np.mean(Dice_left_kidney))+'\n')
-    fw.write('Dice_gallbladder'+str(np.mean(Dice_gallbladder))+'\n')
-    fw.write('Dice_esophagus'+str(np.mean(Dice_esophagus))+'\n')
-    fw.write('Dice_liver'+str(np.mean(Dice_liver))+'\n')
-    fw.write('Dice_stomach'+str(np.mean(Dice_stomach))+'\n')
-    fw.write('Dice_aorta'+str(np.mean(Dice_aorta))+'\n')
-    fw.write('Dice_inferior_vena_cava'+str(np.mean(Dice_inferior_vena_cava))+'\n')
-    fw.write('Dice_portal_vein_splenic_vein'+str(np.mean(Dice_portal_vein_splenic_vein))+'\n')
-    fw.write('Dice_pancreas'+str(np.mean(Dice_pancreas))+'\n')
-    fw.write('Dice_right_adrenal_gland'+str(np.mean(Dice_right_adrenal_gland))+'\n')
-    fw.write('Dice_left_adrenal_gland'+str(np.mean(Dice_left_adrenal_gland))+'\n')
+    fw.write('Dice_spleen'+str(Dice_spleen )+'\n')
+    fw.write('Dice_right_kidney'+str(Dice_right_kidney)+'\n')
+    fw.write('Dice_left_kidney'+str(Dice_left_kidney)+'\n')
+    fw.write('Dice_gallbladder'+str(Dice_gallbladder)+'\n')
+    fw.write('Dice_esophagus'+str(Dice_esophagus)+'\n')
+    fw.write('Dice_liver'+str(Dice_liver)+'\n')
+    fw.write('Dice_stomach'+str(Dice_stomach)+'\n')
+    fw.write('Dice_aorta'+str(Dice_aorta)+'\n')
+    fw.write('Dice_inferior_vena_cava'+str(Dice_inferior_vena_cava)+'\n')
+    fw.write('Dice_portal_vein_splenic_vein'+str(Dice_portal_vein_splenic_vein)+'\n')
+    fw.write('Dice_pancreas'+str(Dice_pancreas)+'\n')
+    fw.write('Dice_right_adrenal_gland'+str(Dice_right_adrenal_gland)+'\n')
+    fw.write('Dice_left_adrenal_gland'+str(Dice_left_adrenal_gland)+'\n')
     fw.write('*'*20+'\n')
     
     dsc=[]
-    dsc.append(np.mean(Dice_spleen))
-    dsc.append(np.mean(Dice_right_kidney))
-    dsc.append(np.mean(Dice_left_kidney))
-    dsc.append(np.mean(Dice_gallbladder))
+    dsc.append(Dice_spleen)
+    dsc.append(Dice_right_kidney)
+    dsc.append(Dice_left_kidney)
+    dsc.append(Dice_gallbladder)
     #dsc.append(np.mean(Dice_esophagus))
-    dsc.append(np.mean(Dice_liver))
-    dsc.append(np.mean(Dice_stomach))
-    dsc.append(np.mean(Dice_aorta))
+    dsc.append(Dice_liver)
+    dsc.append(Dice_stomach)
+    dsc.append(Dice_aorta)
     #dsc.append(np.mean(Dice_inferior_vena_cava))
     #dsc.append(np.mean(Dice_portal_vein_splenic_vein))
-    dsc.append(np.mean(Dice_pancreas))
+    dsc.append(Dice_pancreas)
+    dsc = np.mean(dsc)
     #dsc.append(np.mean(Dice_right_adrenal_gland))
     #dsc.append(np.mean(Dice_left_adrenal_gland))
-    fw.write('DSC:'+str(np.mean(dsc))+'\n')
-
-    print(f"Dice_spleen: f{np.mean(Dice_spleen)}")
-    print(f"Dice_right_kidney: f{np.mean(Dice_right_kidney)}")
-    print(f"Dice_left_kidney: f{np.mean(Dice_left_kidney)}")
-    print(f"Dice_gallbladder: f{np.mean(Dice_gallbladder)}")
-    print(f"Dice_liver: f{np.mean(Dice_liver)}")
-    print(f"Dice_stomach: f{np.mean(Dice_stomach)}")
-    print(f"Dice_aorta: f{np.mean(Dice_aorta)}")
-    print(f"Dice_pancreas: f{np.mean(Dice_pancreas)}")
-    print(f"Dice: f{np.mean(dsc)}")
+    fw.write('DSC:'+str(dsc)+'\n')
+    print(f"Dice_aorta: f{Dice_aorta}")
+    print(f"Dice_gallbladder: f{Dice_gallbladder}")
+    print(f"Dice_left_kidney: f{Dice_left_kidney}")
+    print(f"Dice_right_kidney: f{Dice_right_kidney}")
+    print(f"Dice_liver: f{Dice_liver}")
+    print(f"Dice_pancreas: f{Dice_pancreas}")
+    print(f"Dice_spleen: f{Dice_spleen}")
+    print(f"Dice_stomach: f{Dice_stomach}")
+    print(f"Dice: f{dsc}")
     print('done')
 
+    idx = experiment_id
+    clm = ["DSC", "Aotra", "Gallbladder", "Kidnery(L)", "Kidnery(R)", "Liver", "Pancreas", "Spleen", "Stomach"]
+    data = [[dsc*100,Dice_aorta*100,Dice_gallbladder*100,Dice_right_kidney*100,Dice_right_kidney*100,Dice_liver*100,Dice_pancreas*100,Dice_spleen*100,Dice_stomach*100]]
+    df=pd.DataFrame(data,index=[idx],columns=clm)
+    df.to_csv(join(pre_path,"result.cvs"))
+
+    df.to_excel(join(pre_path,"result.xlsx"), sheet_name = 'Synapse')
 if __name__ == '__main__':
-    pre_path = "/home/lwt/code/nnUNet_trained_models/nnUNet/3d_fullres/Task017_AbdominalOrganSegmentation/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/nnunet_211123_095445/model_final_checkpoint"
-    synapse_inference(pre_path)
+    pre_path = "/home/lwt/code/nnUNet_trained_models/nnUNet/3d_fullres/Task017_AbdominalOrganSegmentation/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/swin_3d_up_down_conv_211209_195452/model_final_checkpoint"
+    experiment_id = "swin_3d_up_down_conv_211209_195452"
+    synapse_inference(pre_path,experiment_id)

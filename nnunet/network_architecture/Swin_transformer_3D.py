@@ -5,6 +5,8 @@
 # Written by Ze Liu
 # --------------------------------------------------------
 
+
+import torch.nn.functional as F
 import torch
 # from torch._C import DoubleTensor
 import torch.nn as nn
@@ -316,9 +318,10 @@ class PatchMerging(nn.Module):
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim
-        self.reduction = nn.Linear(8 * dim, 2 * dim, bias=False)
-        self.norm = norm_layer(8 * dim)
-
+        # self.reduction = nn.Linear(8 * dim, 2 * dim, bias=False)
+        # self.norm = norm_layer(dim)
+        self.reduction = nn.Conv3d(dim,dim*2,kernel_size=2,stride=2)
+        self.norm = norm_layer(dim)
     def forward(self, x):
         """
         x: B, S*H*W, C
@@ -327,17 +330,24 @@ class PatchMerging(nn.Module):
         B, L, C = x.shape
         assert L == S * H * W, "input feature has wrong size"
         assert S % 2 == 0 and H % 2 == 0 and W % 2 == 0, f"x size ({S}*{H}*{W}) are not even."
-
+        # x = self.norm(x)
+        # x = x.view(B, S, H, W, C)
+        # x = rearrange(x, 'b (s p1) (h p2) (w p3) c -> b s h w (p1 p2 p3 c)', p1=2, p2=2, p3=2)
+        # # x0 = x[:, 0::2, 0::2, 0::2, :]  # B H/2 W/2 C
+        # # x1 = x[:, 1::2, 0::2, 0::2, :]  # B H/2 W/2 C
+        # # x2 = x[:, 0::2, 1::2, 0::2, :]  # B H/2 W/2 C
+        # # x3 = x[:, 1::2, 1::2, :]  # B H/2 W/2 C
+        # # x = torch.cat([x0, x1, x2, x3], -1)  # B H/2 W/2 4*C
+        # x = x.view(B, -1, 8 * C)  # B H/2*W/2 4*C
+        # x = self.reduction(x)
         x = x.view(B, S, H, W, C)
-        x = rearrange(x, 'b (s p1) (h p2) (w p3) c -> b s h w (p1 p2 p3 c)', p1=2, p2=2, p3=2)
-        # x0 = x[:, 0::2, 0::2, 0::2, :]  # B H/2 W/2 C
-        # x1 = x[:, 1::2, 0::2, 0::2, :]  # B H/2 W/2 C
-        # x2 = x[:, 0::2, 1::2, 0::2, :]  # B H/2 W/2 C
-        # x3 = x[:, 1::2, 1::2, :]  # B H/2 W/2 C
-        # x = torch.cat([x0, x1, x2, x3], -1)  # B H/2 W/2 4*C
-        x = x.view(B, -1, 8 * C)  # B H/2*W/2 4*C
-        x = self.reduction(self.norm(x))
-
+        
+        x = F.gelu(x)
+        x = self.norm(x)
+        x=x.permute(0,4,1,2,3)
+        x=self.reduction(x)
+        x=x.permute(0,2,3,4,1).view(B,-1,2*C)
+        
         return x
 
     def extra_repr(self) -> str:
@@ -354,9 +364,9 @@ class PatchExpand(nn.Module):
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim
-        self.expand = nn.Linear(dim // 8, dim//2, bias=False)
-        self.norm = norm_layer(dim // 8)
-
+        # self.expand = nn.Linear(dim // 8, dim//2, bias=False)
+        self.norm = norm_layer(dim)
+        self.expand=nn.ConvTranspose3d(dim,dim//2,2,2)
     def forward(self, x):
         """
         x: B, H*W, C
@@ -365,11 +375,21 @@ class PatchExpand(nn.Module):
         
         B, L, C = x.shape
         assert L == S * H * W, "input feature has wrong size"
+        # x = self.norm(x)
+        # x = x.view(B, S, H, W, C)
+        # x = rearrange(x, 'b s h w (p1 p2 p3 c)-> b (s p1) (h p2) (w p3) c', p1=2, p2=2, p3=2, c=C//8)
+
+        # x = x.view(B,-1,C//8)
+        # x = self.expand(x)
         
         x = x.view(B, S, H, W, C)
-        x = rearrange(x, 'b s h w (p1 p2 p3 c)-> b (s p1) (h p2) (w p3) c', p1=2, p2=2, p3=2, c=C//8)
-        x = x.view(B,-1,C//8)
-        x = self.expand(self.norm(x))
+
+       
+        
+        x = self.norm(x)
+        x=x.permute(0,4,1,2,3)
+        x = self.expand(x)
+        x=x.permute(0,2,3,4,1).view(B,-1,C//2)
         return x
 class DeepSupervision(nn.Module):
     def __init__(self, input_resolution, dim, norm_layer=nn.LayerNorm,num_classes=None):
@@ -650,13 +670,14 @@ class SwinTransformer_3D(SegmentationNetwork):
                  window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False,deep_supervision=None , **kwargs):
+                 use_checkpoint=False,deep_supervision=None ,conv_op = nn.Conv3d, **kwargs):
         super().__init__()
 
         self._deep_supervision = deep_supervision
         self.do_ds = deep_supervision
         self.num_classes=num_classes
-
+        self.conv_op=conv_op
+        
         self.num_layers = len(depths) # 4
         self.embed_dim = embed_dim
         self.ape = ape

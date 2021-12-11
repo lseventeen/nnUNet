@@ -164,6 +164,7 @@ def main():
     input_folder = join(nnUNet_raw_data, task_name,"imagesTs")
     output_folder = join(network_training_output_dir, model, task_name, trainer_class_name + "__" +
                               args.plans_identifier,"fold_%d" % folds[0], experiment_id,args.chk)
+    
 
     assert model in ["2d", "3d_lowres", "3d_fullres", "3d_cascade_fullres"], "-m must be 2d, 3d_lowres, 3d_fullres or " \
                                                                              "3d_cascade_fullres"
@@ -235,9 +236,9 @@ def main():
                         mixed_precision=not args.disable_mixed_precision,
                         step_size=step_size, checkpoint_name=args.chk,experiment_id=args.experiment_id)
     if task_id == 17:
-        synapse_inference(output_folder)
+        synapse_inference(output_folder,experiment_id)
     elif task_id == 27:
-        ACDC_inference(output_folder)
+        ACDC_inference(output_folder,experiment_id)
 
 
 if __name__ == "__main__":
