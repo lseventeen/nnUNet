@@ -318,10 +318,9 @@ class PatchMerging(nn.Module):
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim
-        # self.reduction = nn.Linear(8 * dim, 2 * dim, bias=False)
-        # self.norm = norm_layer(dim)
-        self.reduction = nn.Conv3d(dim,dim*2,kernel_size=2,stride=2)
+        self.reduction = nn.Linear(8 * dim, 2 * dim, bias=False)
         self.norm = norm_layer(dim)
+        # self.reduction = nn.Conv3d(dim,dim*2,kernel_size=2,stride=2)
     def forward(self, x):
         """
         x: B, S*H*W, C
@@ -330,23 +329,24 @@ class PatchMerging(nn.Module):
         B, L, C = x.shape
         assert L == S * H * W, "input feature has wrong size"
         assert S % 2 == 0 and H % 2 == 0 and W % 2 == 0, f"x size ({S}*{H}*{W}) are not even."
-        # x = self.norm(x)
-        # x = x.view(B, S, H, W, C)
-        # x = rearrange(x, 'b (s p1) (h p2) (w p3) c -> b s h w (p1 p2 p3 c)', p1=2, p2=2, p3=2)
-        # # x0 = x[:, 0::2, 0::2, 0::2, :]  # B H/2 W/2 C
-        # # x1 = x[:, 1::2, 0::2, 0::2, :]  # B H/2 W/2 C
-        # # x2 = x[:, 0::2, 1::2, 0::2, :]  # B H/2 W/2 C
-        # # x3 = x[:, 1::2, 1::2, :]  # B H/2 W/2 C
-        # # x = torch.cat([x0, x1, x2, x3], -1)  # B H/2 W/2 4*C
-        # x = x.view(B, -1, 8 * C)  # B H/2*W/2 4*C
-        # x = self.reduction(x)
-        x = x.view(B, S, H, W, C)
         
-        x = F.gelu(x)
         x = self.norm(x)
-        x=x.permute(0,4,1,2,3)
-        x=self.reduction(x)
-        x=x.permute(0,2,3,4,1).view(B,-1,2*C)
+        x = x.view(B, S, H, W, C)
+        x = rearrange(x, 'b (s p1) (h p2) (w p3) c -> b s h w (p1 p2 p3 c)', p1=2, p2=2, p3=2)
+        # x0 = x[:, 0::2, 0::2, 0::2, :]  # B H/2 W/2 C
+        # x1 = x[:, 1::2, 0::2, 0::2, :]  # B H/2 W/2 C
+        # x2 = x[:, 0::2, 1::2, 0::2, :]  # B H/2 W/2 C
+        # x3 = x[:, 1::2, 1::2, :]  # B H/2 W/2 C
+        # x = torch.cat([x0, x1, x2, x3], -1)  # B H/2 W/2 4*C
+        x = x.view(B, -1, 8 * C)  # B H/2*W/2 4*C
+        x = self.reduction(x)
+        # x = x.view(B, S, H, W, C)
+        
+        # x = F.gelu(x)
+        # x = self.norm(x)
+        # x=x.permute(0,4,1,2,3)
+        # x=self.reduction(x)
+        # x=x.permute(0,2,3,4,1).view(B,-1,2*C)
         
         return x
 
@@ -364,32 +364,31 @@ class PatchExpand(nn.Module):
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim
-        # self.expand = nn.Linear(dim // 8, dim//2, bias=False)
+        self.expand = nn.Linear(dim // 8, dim//2, bias=False)
+        # self.expand=nn.ConvTranspose3d(dim,dim//2,2,2)
         self.norm = norm_layer(dim)
-        self.expand=nn.ConvTranspose3d(dim,dim//2,2,2)
+    
+       
+        
     def forward(self, x):
         """
         x: B, H*W, C
         """
         S, H, W = self.input_resolution
-        
         B, L, C = x.shape
-        assert L == S * H * W, "input feature has wrong size"
+        assert L == S * H * W, "input feature has wrong size"   
+
+        x = self.norm(x)
+        x = x.view(B, S, H, W, C)
+        x = rearrange(x, 'b s h w (p1 p2 p3 c)-> b (s p1) (h p2) (w p3) c', p1=2, p2=2, p3=2, c=C//8)
+        x = x.view(B,-1,C//8)
+        x = self.expand(x)
+        
         # x = self.norm(x)
         # x = x.view(B, S, H, W, C)
-        # x = rearrange(x, 'b s h w (p1 p2 p3 c)-> b (s p1) (h p2) (w p3) c', p1=2, p2=2, p3=2, c=C//8)
-
-        # x = x.view(B,-1,C//8)
+        # x=x.permute(0,4,1,2,3)
         # x = self.expand(x)
-        
-        x = x.view(B, S, H, W, C)
-
-       
-        
-        x = self.norm(x)
-        x=x.permute(0,4,1,2,3)
-        x = self.expand(x)
-        x=x.permute(0,2,3,4,1).view(B,-1,C//2)
+        # x=x.permute(0,2,3,4,1).view(B,-1,C//2)
         return x
 class DeepSupervision(nn.Module):
     def __init__(self, input_resolution, dim, norm_layer=nn.LayerNorm,num_classes=None):
