@@ -339,13 +339,13 @@ class nnUNetTrainer(NetworkTrainer):
         else:
             self.batch_size = stage_plans['batch_size']
         self.net_pool_per_axis = stage_plans['num_pool_per_axis']
-        if self.custom_patch_size is not None:
-            self.patch_size = self.custom_patch_size 
-        elif self.custom_network == "nnformer" and self.task_id == 17:
+        # if self.custom_patch_size is not None:
+        #     self.patch_size = self.custom_patch_size 
+        if (self.custom_network == "nnformer" or self.custom_patch_size==True) and self.task_id == 17:
             self.patch_size = np.array([64,128,128])
 
 
-        elif self.custom_network == "nnformer" and self.task_id == 27:   
+        elif (self.custom_network == "nnformer" or self.custom_patch_size==True) and self.task_id == 27:   
             self.patch_size = np.array([14,160,160])
 
             

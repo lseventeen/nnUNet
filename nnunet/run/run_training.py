@@ -34,7 +34,7 @@ def main():
     parser.add_argument("--fold", default="0", help='0, 1, ..., 5 or \'all\'')
     parser.add_argument("-ei","--experiment_id", default="nnunet")
     parser.add_argument("-cbs", "--custom_batch_size", required=False, default=None,type=int)
-    parser.add_argument("-cps", "--custom_patch_size", required=False, default=None,type=int)
+    parser.add_argument("-cps", "--custom_patch_size", required=False, default=False,action="store_true")
     parser.add_argument("-eei", "--exist_experiment_id", required=False, default=None)
     parser.add_argument("-val", "--validation_only", help="use this if you want to only run the validation",
                         action="store_true")
@@ -198,9 +198,9 @@ def main():
         trainer.network.eval()
 
         # predict validation
-        trainer.validate(save_softmax=args.npz, validation_folder_name=val_folder,
-                         run_postprocessing_on_folds=not disable_postprocessing_on_folds,
-                         overwrite=args.val_disable_overwrite)
+        # trainer.validate(save_softmax=args.npz, validation_folder_name=val_folder,
+        #                  run_postprocessing_on_folds=not disable_postprocessing_on_folds,
+        #                  overwrite=args.val_disable_overwrite)
 
         if network == '3d_lowres' and not args.disable_next_stage_pred:
             print("predicting segmentations for the next stage of the cascade")

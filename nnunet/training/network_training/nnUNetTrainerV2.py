@@ -26,6 +26,8 @@ from nnunet.network_architecture.generic_UNet import Generic_UNet
 from nnunet.network_architecture.Swin_Unet_l_gelunorm import synapse_swintransformer
 from nnunet.network_architecture.Swin_Unet_s_ACDC_2laterdown import ACDC_swintransformer
 from nnunet.network_architecture.Swin_transformer_3D import SwinTransformer_3D
+from nnunet.network_architecture.parallelly_fusing_Swin_Unet import ParallellyFusingSwinUnet 
+from nnunet.network_architecture.Swin_transformer_3Dv2 import SwinTransformer_3Dv2
 from nnunet.network_architecture.initialization import InitWeights_He
 from nnunet.network_architecture.neural_network import SegmentationNetwork
 from nnunet.training.data_augmentation.default_data_augmentation import default_2D_augmentation_params, \
@@ -187,12 +189,22 @@ class nnUNetTrainerV2(nnUNetTrainer):
                                     net_nonlin, net_nonlin_kwargs, True, False, lambda x: x, InitWeights_He(1e-2),
                                     self.net_num_pool_op_kernel_sizes, self.net_conv_kernel_sizes, False, True, True)
         elif self.custom_network == "CTPN" and self.task_id == 17:    
-            self.network = SwinTransformer_3D(img_size=[48,192,192], patch_size=[2,4,4], in_chans=1, num_classes=14,
+            self.network = SwinTransformer_3Dv2(img_size=self.patch_size, patch_size=[2,4,4], in_chans=1, num_classes=14,
                  embed_dim=192, depths=[2, 2, 2, 2], num_heads=[6, 12, 24, 48],
                  window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
                  use_checkpoint=False,deep_supervision =True, conv_op=conv_op)
+        elif self.custom_network == "PFTC" and self.task_id == 17:    
+            self.network = ParallellyFusingSwinUnet(img_size = self.patch_size,  base_num_features=24, 
+                                    num_classes=self.num_classes, num_pool=len(self.net_num_pool_op_kernel_sizes), image_channels=self.num_input_channels,
+                                    num_only_conv_stage=2,num_conv_per_stage=2,feat_map_mul_on_downscale=2, conv_op=conv_op,
+                                    norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op, dropout_op_kwargs=dropout_op_kwargs,
+                                    nonlin=net_nonlin, nonlin_kwargs=net_nonlin_kwargs, deep_supervision=True,                                                                                      
+                                    weightInitializer=InitWeights_He(1e-2), pool_op_kernel_sizes=self.net_num_pool_op_kernel_sizes,
+                                    conv_kernel_sizes=self.net_conv_kernel_sizes, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
+                                    window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,drop_rate=0., attn_drop_rate=0., 
+                                    drop_path_rate=0.1,norm_layer=nn.LayerNorm, use_checkpoint=False,)
                       
         if torch.cuda.is_available():
             self.network.cuda()

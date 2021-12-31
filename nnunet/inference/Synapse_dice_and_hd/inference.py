@@ -161,10 +161,10 @@ def synapse_inference(pre_path,experiment_id):
     clm = ["DSC", "Aotra", "Gallbladder", "Kidnery(L)", "Kidnery(R)", "Liver", "Pancreas", "Spleen", "Stomach"]
     data = [[dsc*100,Dice_aorta*100,Dice_gallbladder*100,Dice_right_kidney*100,Dice_right_kidney*100,Dice_liver*100,Dice_pancreas*100,Dice_spleen*100,Dice_stomach*100]]
     df=pd.DataFrame(data,index=[idx],columns=clm)
-    df.to_csv(join(pre_path,"result.cvs"))
+    df.to_csv(join(pre_path,f"{experiment_id}_result.cvs"))
 
-    df.to_excel(join(pre_path,"result.xlsx"), sheet_name = 'Synapse')
+    df.to_excel(join(pre_path,f"{experiment_id}_result.xlsx"), sheet_name = 'Synapse')#final_checkpoint
 if __name__ == '__main__':
-    pre_path = "/home/lwt/code/nnUNet_trained_models/nnUNet/3d_fullres/Task017_AbdominalOrganSegmentation/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/swin_3d_up_down_conv_211209_195452/model_final_checkpoint"
-    experiment_id = "swin_3d_up_down_conv_211209_195452"
+    pre_path = "/home/lwt/code/nnUNet_trained_models/nnUNet/3d_fullres/Task017_AbdominalOrganSegmentation/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/nnformer_pretrain_211130_190450/model_best"
+    experiment_id = "nnunet_211123_095445"
     synapse_inference(pre_path,experiment_id)

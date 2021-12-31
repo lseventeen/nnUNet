@@ -433,14 +433,15 @@ class BasicLayer(nn.Module):
 
     def __init__(self, dim, input_resolution, depth, num_heads, window_size,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False):
+                 drop_path=0., norm_layer=nn.LayerNorm, down_or_upsample=None, 
+                 use_checkpoint=False,deep_supervision=None,num_classes=None,is_encoder=True):
 
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
         self.depth = depth
         self.use_checkpoint = use_checkpoint
-
+        self.is_encoder = is_encoder
         # build blocks
         self.blocks = nn.ModuleList([
             SwinTransformerBlock(dim=dim, input_resolution=input_resolution,
@@ -454,100 +455,35 @@ class BasicLayer(nn.Module):
             for i in range(depth)])
 
         # patch merging layer
-        if downsample is not None:
-            self.downsample = downsample(input_resolution, dim=dim, norm_layer=norm_layer)
+        if down_or_upsample is not None:
+            self.down_or_upsample = down_or_upsample(input_resolution, dim=dim, norm_layer=norm_layer)
         else:
-            self.downsample = None
-
-    def forward(self, x):
-        for blk in self.blocks:
-            if self.use_checkpoint:
-                x = checkpoint.checkpoint(blk, x)
-            else:
-                x = blk(x)
-        if self.downsample is not None:
-            x = self.downsample(x)
-        return x
-
-    def extra_repr(self) -> str:
-        return f"dim={self.dim}, input_resolution={self.input_resolution}, depth={self.depth}"
-
-    def flops(self):
-        flops = 0
-        for blk in self.blocks:
-            flops += blk.flops()
-        if self.downsample is not None:
-            flops += self.downsample.flops()
-        return flops
-
-
-
-class BasicLayer_up(nn.Module):
-    """ A basic Swin Transformer layer for one stage.
-
-    Args:
-        dim (int): Number of input channels.
-        input_resolution (tuple[int]): Input resolution.
-        depth (int): Number of blocks.
-        num_heads (int): Number of attention heads.
-        window_size (int): Local window size.
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default: True
-        qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set.
-        drop (float, optional): Dropout rate. Default: 0.0
-        attn_drop (float, optional): Attention dropout rate. Default: 0.0
-        drop_path (float | tuple[float], optional): Stochastic depth rate. Default: 0.0
-        norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm
-        downsample (nn.Module | None, optional): Downsample layer at the end of the layer. Default: None
-        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
-    """
-
-    def __init__(self, dim, input_resolution, depth, num_heads, window_size,
-                 mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., norm_layer=nn.LayerNorm, upsample=None, 
-                 use_checkpoint=False,deep_supervision=True,num_classes=None):
-
-        super().__init__()
-        self.dim = dim
-        self.input_resolution = input_resolution
-        self.depth = depth
-        self.use_checkpoint = use_checkpoint
-
-        # build blocks
-        self.blocks = nn.ModuleList([
-            SwinTransformerBlock(dim=dim, input_resolution=input_resolution,
-                                 num_heads=num_heads, window_size=window_size,
-                                 shift_size=[0,0,0] if (i % 2 == 0) else [window_size[0] // 2,window_size[1] // 2,window_size[2] // 2],
-                                 mlp_ratio=mlp_ratio,
-                                 qkv_bias=qkv_bias, qk_scale=qk_scale,
-                                 drop=drop, attn_drop=attn_drop,
-                                 drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                                 norm_layer=norm_layer)
-            for i in range(depth)])
-
-        # patch merging layer
-        if upsample is not None:
-            self.upsample = upsample(input_resolution, dim=dim, norm_layer=norm_layer)
-        else:
-            self.upsample = None
-        if deep_supervision:
+            self.down_or_upsample = None
+        if deep_supervision is not None and is_encoder == False:
             self.deep_supervision = deep_supervision(input_resolution, dim=dim, norm_layer=norm_layer,num_classes=num_classes)
+        else:
+            self.deep_supervision = None
     def forward(self, x):
         for blk in self.blocks:
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(blk, x)
             else:
                 x = blk(x)
-        if self.upsample is not None:
-            up = self.upsample(x)
+        if self.down_or_upsample is not None:
+            du = self.down_or_upsample(x)
+
         if self.deep_supervision is not None:
             ds = self.deep_supervision(x)
-        if self.upsample is not None and self.deep_supervision is not None:
-            return up,ds
-        elif self.upsample is None and self.deep_supervision is not None:
+
+        if self.is_encoder and self.down_or_upsample is not None:
+            return du
+        if self.is_encoder and self.down_or_upsample is None:
+            return x
+        elif self.down_or_upsample is not None and self.deep_supervision is not None:
+            return du,ds
+        elif self.down_or_upsample is None and self.deep_supervision is not None:
             return x,ds
        
-
     def extra_repr(self) -> str:
         return f"dim={self.dim}, input_resolution={self.input_resolution}, depth={self.depth}"
 
@@ -555,9 +491,45 @@ class BasicLayer_up(nn.Module):
         flops = 0
         for blk in self.blocks:
             flops += blk.flops()
-        if self.downsample is not None:
-            flops += self.downsample.flops()
+        if self.down_or_upsample is not None:
+            flops += self.down_or_upsample.flops()
         return flops
+
+# done
+class project(nn.Module):
+    def __init__(self,in_dim,out_dim,stride,padding,activate,norm,last=False):
+        super().__init__()
+        self.out_dim=out_dim
+        self.conv1=nn.Conv3d(in_dim,out_dim,kernel_size=3,stride=stride,padding=padding)
+        self.conv2=nn.Conv3d(out_dim,out_dim,kernel_size=3,stride=1,padding=1)
+        self.activate=activate()
+        self.norm1=norm(out_dim)
+        self.last=last  
+        if not last:
+            self.norm2=norm(out_dim)
+            
+    def forward(self,x):
+        x=self.conv1(x)
+        x=self.activate(x)
+        #norm1
+        Ws, Wh, Ww = x.size(2), x.size(3), x.size(4)
+        x = x.flatten(2).transpose(1, 2)
+        x = self.norm1(x)
+        x = x.transpose(1, 2).view(-1, self.out_dim, Ws, Wh, Ww)
+        
+
+        x=self.conv2(x)
+        if not self.last:
+            x=self.activate(x)
+            #norm2
+            Ws, Wh, Ww = x.size(2), x.size(3), x.size(4)
+            x = x.flatten(2).transpose(1, 2)
+            x = self.norm2(x)
+            x = x.transpose(1, 2).view(-1, self.out_dim, Ws, Wh, Ww)
+        return x
+        
+    
+
 
 
 
@@ -585,12 +557,9 @@ class PatchEmbed(nn.Module):
 
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-        self.to_patch_embedding = nn.Sequential(
-            Rearrange('b c (s p1) (h p2) (w p3) -> b (s h w) (p1 p2 p3 c)', p1 = patch_size[0], p2 = patch_size[1], p3 = patch_size[2]),
-            nn.Linear(in_chans*patch_size[0]*patch_size[1]*patch_size[2], embed_dim),
-        )
-        # self.proj = nn.Conv3d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
-        
+        self.proj = nn.Conv3d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        # self.proj1 = project(in_chans,embed_dim//2,[2,2,2],1,nn.GELU,nn.LayerNorm,False)
+        # self.proj2 = project(embed_dim//2,embed_dim,[1,2,2],1,nn.GELU,nn.LayerNorm,True)
         
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
@@ -603,7 +572,8 @@ class PatchEmbed(nn.Module):
         assert S == self.img_size[0] and H == self.img_size[1] and W == self.img_size[2], \
             f"Input image size ({S}*{H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]}*{self.img_size[2]})."
         x = self.proj(x).flatten(2).transpose(1, 2)  # B Ps*Ph*Pw C
-        x = self.to_patch_embedding(x)
+        
+        # x = self.proj2(self.proj1(x)).flatten(2).transpose(1, 2)
         if self.norm is not None:
             x = self.norm(x)
         return x
@@ -639,7 +609,7 @@ class ImageRecover(nn.Module):
         # x = x.view(B,-1,C//(self.patch_size[0]*self.patch_size[1]*self.patch_size[2]))
         x = self.final_conv((self.up_conv(x)))
         return x
-class SwinTransformer_3D(SegmentationNetwork):
+class SwinTransformer_3Dv2(SegmentationNetwork):
     r""" Swin Transformer
         A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
           https://arxiv.org/pdf/2103.14030
@@ -677,8 +647,6 @@ class SwinTransformer_3D(SegmentationNetwork):
         self.do_ds = deep_supervision
         self.num_classes=num_classes
         self.conv_op=conv_op
-        self.final_nonlin = softmax_helper
-
         self.num_layers = len(depths) # 4
         self.embed_dim = embed_dim
         self.ape = ape
@@ -721,8 +689,10 @@ class SwinTransformer_3D(SegmentationNetwork):
                                drop=drop_rate, attn_drop=attn_drop_rate,
                                drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])], #[0, 1/12], [2/12,3/12],[4/12,5/12,...9/12],[10/12,11/12]
                                norm_layer=norm_layer,
-                               downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
-                               use_checkpoint=use_checkpoint)
+                               down_or_upsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
+                               use_checkpoint=use_checkpoint,
+                               deep_supervision=None,
+                               is_encoder=True)
             self.layers.append(layer)
 
         self.norm = norm_layer(self.num_features)
@@ -740,7 +710,7 @@ class SwinTransformer_3D(SegmentationNetwork):
                 patches_resolution[1] // (2 ** (self.num_layers-1-i_layer)),patches_resolution[2] // (2 ** (self.num_layers-1-i_layer))), 
                 dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)), norm_layer=norm_layer)
             else:
-                layer_up = BasicLayer_up(dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)),
+                layer_up = BasicLayer(dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)),
                                 input_resolution=(patches_resolution[0] // (2 ** (self.num_layers-1-i_layer)),
                                                     patches_resolution[1] // (2 ** (self.num_layers-1-i_layer)),
                                                     patches_resolution[2] // (2 ** (self.num_layers-1-i_layer))),
@@ -752,10 +722,11 @@ class SwinTransformer_3D(SegmentationNetwork):
                                 drop=drop_rate, attn_drop=attn_drop_rate,
                                 drop_path=dpr[sum(depths[:(self.num_layers-1-i_layer)]):sum(depths[:(self.num_layers-1-i_layer) + 1])],
                                 norm_layer=norm_layer,
-                                upsample=PatchExpand if (i_layer < self.num_layers - 1) else None,
+                                down_or_upsample=PatchExpand if (i_layer < self.num_layers - 1) else None,
                                 use_checkpoint=use_checkpoint,
                                 deep_supervision=DeepSupervision if deep_supervision else None,
-                                num_classes=num_classes)
+                                num_classes=num_classes,
+                                is_encoder=False)
             self.layers_up.append(layer_up)
             self.concat_back_dim.append(concat_linear)
 
@@ -804,8 +775,7 @@ class SwinTransformer_3D(SegmentationNetwork):
             x = layer(x)
 
         x = self.norm(x)  # B L C
-        # x = self.avgpool(x.transpose(1, 2))  # B C 1
-        # x = torch.flatten(x, 1)
+     
         return x, x_downsample
        
      #Dencoder and Skip connection
@@ -816,25 +786,14 @@ class SwinTransformer_3D(SegmentationNetwork):
                 x = layer_up(x)
             else:
                 # x = torch.cat([x,x_downsample[3-inx]],-1)
-                x += x_downsample[3-inx]
                 # x = self.concat_back_dim[inx](x)
+                x += x_downsample[3-inx]
                 x, ds = layer_up(x)
-                out.append(self.final_nonlin(ds))
+                out.append(ds)
         x = self.image_recover(x)
         out.append(x)
         return out
-    # def up_x4(self, x):
-    #     S, H, W = self.patches_resolution
-    #     B, L, C = x.shape
-    #     assert L == S*H*W, "input features has wrong size"
-
-    #     if self.final_upsample=="expand_first":
-    #         x = self.up(x)
-    #         x = x.view(B,4*H,4*W,-1)
-    #         x = x.permute(0,3,1,2) #B,C,H,W
-    #         x = self.output(x)
-            
-    #     return x
+   
 
     def forward(self, x):
         x, x_downsample = self.forward_features(x)

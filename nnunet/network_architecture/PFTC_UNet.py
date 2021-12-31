@@ -29,9 +29,9 @@ class ConvDropoutNormNonlin(nn.Module):
     """
 
     def __init__(self, input_channels, output_channels,
-                 conv_op=nn.Conv2d, conv_kwargs=None,
-                 norm_op=nn.BatchNorm2d, norm_op_kwargs=None,
-                 dropout_op=nn.Dropout2d, dropout_op_kwargs=None,
+                 conv_op=nn.Conv3d, conv_kwargs=None,
+                 norm_op=nn.BatchNorm3d, norm_op_kwargs=None,
+                 dropout_op=nn.Dropout3d, dropout_op_kwargs=None,
                  nonlin=nn.LeakyReLU, nonlin_kwargs=None):
         super(ConvDropoutNormNonlin, self).__init__()
         if nonlin_kwargs is None:
@@ -226,26 +226,15 @@ class Generic_UNet(SegmentationNetwork):
         self._deep_supervision = deep_supervision
         self.do_ds = deep_supervision
 
-        if conv_op == nn.Conv2d:
-            upsample_mode = 'bilinear'
-            pool_op = nn.MaxPool2d
-            transpconv = nn.ConvTranspose2d
-            if pool_op_kernel_sizes is None:
-                pool_op_kernel_sizes = [(2, 2)] * num_pool
-            if conv_kernel_sizes is None:
-                conv_kernel_sizes = [(3, 3)] * (num_pool + 1)
-        elif conv_op == nn.Conv3d:
+           
+        if conv_op == nn.Conv3d:
             upsample_mode = 'trilinear'
             pool_op = nn.MaxPool3d
             transpconv = nn.ConvTranspose3d
-            if pool_op_kernel_sizes is None:
-                pool_op_kernel_sizes = [(2, 2, 2)] * num_pool
-            if conv_kernel_sizes is None:
-                conv_kernel_sizes = [(3, 3, 3)] * (num_pool + 1)
-        else:
-            raise ValueError("unknown convolution dimensionality, conv op: %s" % str(conv_op))
+            
+        
 
-        self.input_shape_must_be_divisible_by = np.prod(pool_op_kernel_sizes[:2], 0, dtype=np.int64)
+        self.input_shape_must_be_divisible_by = np.prod(pool_op_kernel_sizes, 0, dtype=np.int64)
         self.pool_op_kernel_sizes = pool_op_kernel_sizes
         self.conv_kernel_sizes = conv_kernel_sizes
 
