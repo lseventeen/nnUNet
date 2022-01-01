@@ -140,13 +140,17 @@ class BasicLayer(nn.Module):
         if down_or_upsample is not None:
             dowm_stage = num_stage-1 if not is_encoder else num_stage 
             conv_op=nn.ConvTranspose3d if not is_encoder else nn.Conv3d
-            self.du_conv_kwargs = {'kernel_size': pool_op_kernel_sizes[dowm_stage],
-                                'stride': pool_op_kernel_sizes[dowm_stage], 
-                                'padding': 0,
-                                'dilation': 1, 
-                                'bias': True}
+            if not is_encoder:
+                self.conv_kwargs['kernel_size'] = pool_op_kernel_sizes[dowm_stage]
+            self.conv_kwargs['stride'] = pool_op_kernel_sizes[dowm_stage]
+            self.conv_kwargs['padding'] = self.conv_pad_sizes[dowm_stage] if is_encoder else 0
+            # self.du_conv_kwargs = {'kernel_size': pool_op_kernel_sizes[dowm_stage],
+            #                     'stride': pool_op_kernel_sizes[dowm_stage], 
+            #                     'padding': 0,
+            #                     'dilation': 1, 
+            #                     'bias': True}
             self.down_or_upsample = down_or_upsample(self.input_du_channels, self.output_du_channels, conv_op, 
-                                        self.du_conv_kwargs, self.norm_op, self.norm_op_kwargs, self.dropout_op, 
+                                        self.conv_kwargs, self.norm_op, self.norm_op_kwargs, self.dropout_op, 
                                         self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs)
         else:
             self.down_or_upsample = None
