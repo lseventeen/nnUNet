@@ -17,7 +17,6 @@ from einops import rearrange
 from nnunet.network_architecture.initialization import InitWeights_He
 from nnunet.network_architecture.PFTC_swin3D import *
 from nnunet.network_architecture.PFTC_UNet import *
-MAX_channels = 320
 class DownOrUpSample(nn.Module):
     def __init__(self, input_feature_channels, output_feature_channels,
                  conv_op, conv_kwargs,
@@ -69,7 +68,7 @@ class BasicLayer(nn.Module):
                  norm_op=nn.BatchNorm2d, norm_op_kwargs=None,
                  dropout_op=nn.Dropout3d, dropout_op_kwargs=None,
                  nonlin=nn.LeakyReLU, nonlin_kwargs=None, 
-                 conv_kernel_sizes=None, conv_pad_sizes=None, pool_op_kernel_sizes=None,basic_block=ConvDropoutNormNonlin, 
+                 conv_kernel_sizes=None, conv_pad_sizes=None, pool_op_kernel_sizes=None,basic_block=ConvDropoutNormNonlin, max_num_features_factor=None,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., norm_layer=nn.LayerNorm, down_or_upsample=None, feat_map_mul_on_downscale=2,
                  use_checkpoint=False,deep_supervision=None,num_classes=None,is_encoder=True):
@@ -80,7 +79,8 @@ class BasicLayer(nn.Module):
         self.num_pool = num_pool
         self.use_checkpoint = use_checkpoint
         self.is_encoder = is_encoder
-        self.dim=min((base_num_features * feat_map_mul_on_downscale ** num_stage), base_num_features*10)
+        self.max_num_features_factor = max_num_features_factor if max_num_features_factor is not None else 1000
+        self.dim=min((base_num_features * feat_map_mul_on_downscale ** num_stage), base_num_features*self.max_num_features_factor)
         if nonlin_kwargs is None:
             nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}
         if dropout_op_kwargs is None:
@@ -111,8 +111,9 @@ class BasicLayer(nn.Module):
         self.depth = depth
         self.conv_kwargs['kernel_size'] = self.conv_kernel_sizes[num_stage]
         self.conv_kwargs['padding'] = self.conv_pad_sizes[num_stage]
-        self.input_du_channels = min(int(base_num_features * feat_map_mul_on_downscale ** num_stage), base_num_features*10)
-        self.output_du_channels = min(int(base_num_features * feat_map_mul_on_downscale ** (num_stage+1 if is_encoder else num_stage-1)), base_num_features*10)
+        self.input_du_channels = self.dim
+        self.output_du_channels = min(int(base_num_features * feat_map_mul_on_downscale ** (num_stage+1 if is_encoder else num_stage-1)), 
+                                        base_num_features*self.max_num_features_factor)
             # add convolutions
         self.conv_blocks = StackedConvLayers(self.input_features, self.output_features, num_conv_per_stage,
                                                               self.conv_op, self.conv_kwargs, self.norm_op,
@@ -227,8 +228,8 @@ class ParallellyFusingSwinUnet(SegmentationNetwork):
                  norm_op=nn.BatchNorm2d, norm_op_kwargs=None,
                  dropout_op=nn.Dropout3d, dropout_op_kwargs=None,
                  nonlin=nn.LeakyReLU, nonlin_kwargs=None, deep_supervision=True, 
-                 weightInitializer=InitWeights_He(1e-2), pool_op_kernel_sizes=None,
-                 conv_kernel_sizes=None, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
+                 weightInitializer=InitWeights_He(1e-2), pool_op_kernel_sizes=None, 
+                 conv_kernel_sizes=None, max_num_features_factor=None, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
                  window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, use_checkpoint=False, **kwargs):
@@ -285,6 +286,7 @@ class ParallellyFusingSwinUnet(SegmentationNetwork):
                         conv_op=conv_op,norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op,
                         dropout_op_kwargs=dropout_op_kwargs,nonlin=nonlin, nonlin_kwargs=nonlin_kwargs, 
                         conv_kernel_sizes= conv_kernel_sizes, conv_pad_sizes=self.conv_pad_sizes,pool_op_kernel_sizes=self.pool_op_kernel_sizes,
+                        max_num_features_factor = max_num_features_factor,
                         mlp_ratio=self.mlp_ratio,
                         qkv_bias=qkv_bias, qk_scale=qk_scale,
                         drop=drop_rate, attn_drop=attn_drop_rate,
@@ -312,6 +314,7 @@ class ParallellyFusingSwinUnet(SegmentationNetwork):
                         conv_op=conv_op,norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op,
                         dropout_op_kwargs=dropout_op_kwargs,nonlin=nonlin, nonlin_kwargs=nonlin_kwargs, 
                         conv_kernel_sizes= conv_kernel_sizes, conv_pad_sizes=self.conv_pad_sizes,pool_op_kernel_sizes=self.pool_op_kernel_sizes,
+                        max_num_features_factor = max_num_features_factor,
                         mlp_ratio=self.mlp_ratio,
                         qkv_bias=qkv_bias, qk_scale=qk_scale,
                         drop=drop_rate, attn_drop=attn_drop_rate,

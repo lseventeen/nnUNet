@@ -202,7 +202,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
                                     norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op, dropout_op_kwargs=dropout_op_kwargs,
                                     nonlin=net_nonlin, nonlin_kwargs=net_nonlin_kwargs, deep_supervision=True,                                                                                      
                                     weightInitializer=InitWeights_He(1e-2), pool_op_kernel_sizes=self.net_num_pool_op_kernel_sizes,
-                                    conv_kernel_sizes=self.net_conv_kernel_sizes, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
+                                    conv_kernel_sizes=self.net_conv_kernel_sizes, max_num_features_factor=10, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
                                     window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,drop_rate=0., attn_drop_rate=0., 
                                     drop_path_rate=0.1,norm_layer=nn.LayerNorm, use_checkpoint=False,)
                       
