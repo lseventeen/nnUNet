@@ -98,6 +98,7 @@ if __name__ == "__main__":
         "2": "MLV",
         "3": "LVC"
     }
+    json_dict['evaluationClass'] = [1,2,3]
     json_dict['numTraining'] = len(all_train_files)
     json_dict['numTest'] = len(all_test_files)
     json_dict['training'] = [{'image': "./imagesTr/%s.nii.gz" % i.split("/")[-1][:-12], "label": "./labelsTr/%s.nii.gz" % i.split("/")[-1][:-12]} for i in

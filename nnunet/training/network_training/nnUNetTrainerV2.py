@@ -40,7 +40,7 @@ from torch import nn
 from torch.cuda.amp import autocast
 from nnunet.training.learning_rate.poly_lr import poly_lr
 from batchgenerators.utilities.file_and_folder_operations import *
-
+from nnunet.network_architecture.cotr.ResTranUnet import ResTranUnet
 
 class nnUNetTrainerV2(nnUNetTrainer):
     """
@@ -196,16 +196,18 @@ class nnUNetTrainerV2(nnUNetTrainer):
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
                  use_checkpoint=False,deep_supervision =True, conv_op=conv_op)
         elif self.custom_network == "PFTC" and self.task_id == 17:    
-            self.network = ParallellyFusingSwinUnet(img_size = self.patch_size,  base_num_features=24, 
+            self.network = ParallellyFusingSwinUnet(img_size = self.patch_size,  base_num_features=32, 
                                     num_classes=self.num_classes, num_pool=len(self.net_num_pool_op_kernel_sizes), image_channels=self.num_input_channels,
                                     num_only_conv_stage=2,num_conv_per_stage=2,feat_map_mul_on_downscale=2, conv_op=conv_op,
                                     norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op, dropout_op_kwargs=dropout_op_kwargs,
                                     nonlin=net_nonlin, nonlin_kwargs=net_nonlin_kwargs, deep_supervision=True,                                                                                      
                                     weightInitializer=InitWeights_He(1e-2), pool_op_kernel_sizes=self.net_num_pool_op_kernel_sizes,
-                                    conv_kernel_sizes=self.net_conv_kernel_sizes, max_num_features_factor=None, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
+                                    conv_kernel_sizes=self.net_conv_kernel_sizes, max_num_features_factor=10, depths=[2, 2, 2, 2], num_heads=[4, 8, 16, 32],
                                     window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,drop_rate=0., attn_drop_rate=0., 
                                     drop_path_rate=0.1,norm_layer=nn.LayerNorm, use_checkpoint=False,)
-                      
+        elif self.custom_network == "cotr" and self.task_id == 17: 
+            self.network = ResTranUnet(norm_cfg="IN", activation_cfg="LeakyReLU", img_size=self.plans['plans_per_stage'][1]['patch_size'],
+                                 num_classes=self.num_classes, weight_std=False, deep_supervision=True).cuda()
         if torch.cuda.is_available():
             self.network.cuda()
         # wandb.watch(self.network)

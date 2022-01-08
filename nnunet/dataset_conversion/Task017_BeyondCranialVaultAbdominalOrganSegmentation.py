@@ -97,6 +97,7 @@ if __name__ == "__main__":
         "12": "right adrenal gland",
         "13": "left adrenal gland"}
     )
+    json_dict['evaluationClass'] = [8,4,3,2,6,11,1,7]
     json_dict['numTraining'] = len(train_patient_names)
     json_dict['numTest'] = len(test_patient_names)
   

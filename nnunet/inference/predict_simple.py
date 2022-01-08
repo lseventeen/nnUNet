@@ -21,8 +21,7 @@ from nnunet.paths import default_plans_identifier, network_training_output_dir, 
 from batchgenerators.utilities.file_and_folder_operations import join, isdir
 from nnunet.utilities.task_name_id_conversion import convert_id_to_task_name
 from nnunet.paths import nnUNet_raw_data
-from nnunet.inference.Synapse_dice_and_hd.inference import synapse_inference
-from nnunet.inference.ACDC_dice.inference import ACDC_inference
+from nnunet.inference.inference import get_dice_hd95
 
 def main():
     parser = argparse.ArgumentParser()
@@ -235,11 +234,9 @@ def main():
                         overwrite_existing=overwrite_existing, mode=mode, overwrite_all_in_gpu=all_in_gpu,
                         mixed_precision=not args.disable_mixed_precision,
                         step_size=step_size, checkpoint_name=args.chk,experiment_id=args.experiment_id)
-    if task_id == 17:
-        synapse_inference(output_folder,experiment_id)
-    elif task_id == 27:
-        ACDC_inference(output_folder,experiment_id)
-
+    
+    get_dice_hd95(output_folder,experiment_id,task_id)
+  
 
 if __name__ == "__main__":
     main()
