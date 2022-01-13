@@ -62,6 +62,6 @@ def get_dice_hd95(pre_path,experiment_id, task_id):
     df.to_excel(join(pre_path,f"{experiment_id}_result.xlsx"), sheet_name = 'Synapse')#final_checkpoint
 
 if __name__ == '__main__':
-    pre_path = "/home/lwt/code/nnUNet_trained_models/nnUNet/3d_fullres/Task017_AbdominalOrganSegmentation/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/PFTC_bnf36_mnf10_211231_220929/model_best"
-    experiment_id = "PFTC_bnf36_mnf10_211231_220929"
+    pre_path = "/home/lwt/code/nnUNet_trained_models/nnUNet/3d_fullres/Task017_AbdominalOrganSegmentation/nnUNetTrainerV2__nnUNetPlansv2.1/fold_0/nnunet_211123_095445/model_best"
+    experiment_id = "nnunet_211123_095445"
     get_dice_hd95(pre_path,experiment_id,17)

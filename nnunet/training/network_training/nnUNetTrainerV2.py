@@ -198,7 +198,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
         elif self.custom_network == "PFTC" and self.task_id == 17:    
             self.network = ParallellyFusingSwinUnet(img_size = self.patch_size,  base_num_features=32, 
                                     num_classes=self.num_classes, num_pool=len(self.net_num_pool_op_kernel_sizes), image_channels=self.num_input_channels,
-                                    num_only_conv_stage=2,num_conv_per_stage=2,feat_map_mul_on_downscale=2, conv_op=conv_op,
+                                    num_only_conv_stage=2,num_conv_per_stage=2,feat_map_mul_on_downscale=2, conv_op=conv_op,conv_groups = True,
                                     norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op, dropout_op_kwargs=dropout_op_kwargs,
                                     nonlin=net_nonlin, nonlin_kwargs=net_nonlin_kwargs, deep_supervision=True,                                                                                      
                                     weightInitializer=InitWeights_He(1e-2), pool_op_kernel_sizes=self.net_num_pool_op_kernel_sizes,

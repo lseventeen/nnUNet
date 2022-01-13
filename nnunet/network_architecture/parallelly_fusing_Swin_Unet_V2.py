@@ -17,32 +17,7 @@ from einops import rearrange
 from nnunet.network_architecture.initialization import InitWeights_He
 from nnunet.network_architecture.PFTC_swin3D import *
 from nnunet.network_architecture.PFTC_UNet import *
-# class DownOrUpSample(nn.Module):
-#     def __init__(self, input_feature_channels, output_feature_channels,
-#                  conv_op, conv_kwargs,
-#                  norm_op=nn.InstanceNorm3d, norm_op_kwargs=None,
-#                  dropout_op=nn.Dropout3d, dropout_op_kwargs=None,
-#                  nonlin=nn.LeakyReLU, nonlin_kwargs=None, nonlinbasic_block=ConvDropoutNormNonlin):
-#         super(DownOrUpSample, self).__init__()
-#         if nonlin_kwargs is None:
-#             nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}
-#         if dropout_op_kwargs is None:
-#             dropout_op_kwargs = {'p': 0.5, 'inplace': True}
-#         if norm_op_kwargs is None:
-#             norm_op_kwargs = {'eps': 1e-5, 'affine': True, 'momentum': 0.1}
-#         self.blocks = nonlinbasic_block(input_feature_channels,output_feature_channels, conv_op, conv_kwargs,
-#                                         norm_op, norm_op_kwargs, dropout_op, dropout_op_kwargs,
-#                                         nonlin, nonlin_kwargs)
-#     def forward(self, x):
-#         return self.blocks(x)
-class DownOrUpSample(nn.Module):
-    def __init__(self,conv_op, input_feature_channels, output_feature_channels,
-                 stride):
-        super(DownOrUpSample, self).__init__()
 
-        self.blocks = conv_op(input_feature_channels, output_feature_channels, stride, stride, bias=False)
-    def forward(self, x):
-        return self.blocks(x)
 class DeepSupervision(nn.Module):
     def __init__(self, dim, num_classes):
         super().__init__()
@@ -146,21 +121,8 @@ class BasicLayer(nn.Module):
         # patch merging layer
         if down_or_upsample is not None:
             dowm_stage = num_stage-1 if not is_encoder else num_stage 
-            conv_op=nn.ConvTranspose3d if not is_encoder else nn.Conv3d
-            if not is_encoder:
-                self.conv_kwargs['kernel_size'] = pool_op_kernel_sizes[dowm_stage]
-            self.conv_kwargs['stride'] = pool_op_kernel_sizes[dowm_stage]
-            # self.conv_kwargs['padding'] = self.conv_pad_sizes[dowm_stage] if is_encoder else 0
-            # self.du_conv_kwargs = {'kernel_size': pool_op_kernel_sizes[dowm_stage],
-            #                     'stride': pool_op_kernel_sizes[dowm_stage], 
-            #                     'padding': 0,
-            #                     'dilation': 1, 
-            #                     'bias': True}
-            # self.down_or_upsample = down_or_upsample(self.input_du_channels, self.output_du_channels, conv_op, 
-            #                             self.conv_kwargs, self.norm_op, self.norm_op_kwargs, self.dropout_op, 
-            #                             self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs)
-            self.down_or_upsample = conv_op(self.input_du_channels, self.output_du_channels, 
-                                     self.conv_kwargs['stride'])
+            self.down_or_upsample = down_or_upsample(self.input_du_channels,self.output_du_channels,pool_op_kernel_sizes[dowm_stage],
+                                    pool_op_kernel_sizes[dowm_stage],bias = False)
         else:
             self.down_or_upsample = None
         if deep_supervision is not None and is_encoder == False:
@@ -172,15 +134,15 @@ class BasicLayer(nn.Module):
         if not self.is_encoder and self.num_stage < self.num_pool:
             x = torch.cat((x, skip), dim=1)
         x = self.conv_blocks(x)
-        # if self.num_stage >= self.num_only_conv_stage:
-        #     if not self.is_encoder and self.num_stage < self.num_pool:
-        #         s = s + skip
-        #     for tblk in self.swin_blocks:
-        #         if self.use_checkpoint:
-        #             s = checkpoint.checkpoint(tblk, s)
-        #         else:
-        #             s = tblk(s)
-        #     x = x+s
+        if self.num_stage >= self.num_only_conv_stage:
+            if not self.is_encoder and self.num_stage < self.num_pool:
+                s = s + skip
+            for tblk in self.swin_blocks:
+                if self.use_checkpoint:
+                    s = checkpoint.checkpoint(tblk, s)
+                else:
+                    s = tblk(s)
+            x = x+s
         if self.down_or_upsample is not None:
             du = self.down_or_upsample(x)
 
@@ -242,7 +204,7 @@ class ParallellyFusingSwinUnet(SegmentationNetwork):
                  dropout_op=nn.Dropout3d, dropout_op_kwargs=None,
                  nonlin=nn.LeakyReLU, nonlin_kwargs=None, deep_supervision=True, 
                  weightInitializer=InitWeights_He(1e-2), pool_op_kernel_sizes=None, 
-                 conv_kernel_sizes=None, max_num_features_factor=None, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
+                 conv_kernel_sizes=None, max_num_features_factor=None, depths=[2, 2, 2, 2], num_heads=[4, 8, 16, 32],
                  window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, use_checkpoint=False, **kwargs):
@@ -305,7 +267,7 @@ class ParallellyFusingSwinUnet(SegmentationNetwork):
                         drop=drop_rate, attn_drop=attn_drop_rate,
                         drop_path=dpr[sum(depths[:i_layer-num_only_conv_stage]):sum(depths[:i_layer-num_only_conv_stage+ 1])] if (i_layer >= num_only_conv_stage) else None, #[0, 1/12], [2/12,3/12],[4/12,5/12,...9/12],[10/12,11/12]
                         norm_layer=norm_layer,
-                        down_or_upsample=DownOrUpSample,
+                        down_or_upsample=nn.Conv3d,
                         feat_map_mul_on_downscale=feat_map_mul_on_downscale,
                         use_checkpoint=use_checkpoint,
                         deep_supervision=None,
@@ -333,7 +295,7 @@ class ParallellyFusingSwinUnet(SegmentationNetwork):
                         drop=drop_rate, attn_drop=attn_drop_rate,
                         drop_path=dpr[sum(depths[:i_layer-num_only_conv_stage]):sum(depths[:i_layer-num_only_conv_stage+ 1])] if (i_layer >= num_only_conv_stage) else None, #[0, 1/12], [2/12,3/12],[4/12,5/12,...9/12],[10/12,11/12]
                         norm_layer=norm_layer,
-                        down_or_upsample=DownOrUpSample if (i_layer > 0) else None,
+                        down_or_upsample=nn.ConvTranspose3d if (i_layer > 0) else None,
                         feat_map_mul_on_downscale=feat_map_mul_on_downscale,
                         use_checkpoint=use_checkpoint,
                         deep_supervision=DeepSupervision if deep_supervision and i_layer < num_pool else None,

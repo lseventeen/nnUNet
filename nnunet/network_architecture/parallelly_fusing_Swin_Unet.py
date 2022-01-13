@@ -64,7 +64,7 @@ class BasicLayer(nn.Module):
     """
 
     def __init__(self, num_stage, num_only_conv_stage, num_pool, base_num_features, input_resolution, depth, num_heads, 
-                 window_size, image_channels=1, num_conv_per_stage=2, conv_op=nn.Conv3d,
+                 window_size, image_channels=1, num_conv_per_stage=2, conv_op=nn.Conv3d, conv_groups = False,
                  norm_op=nn.BatchNorm2d, norm_op_kwargs=None,
                  dropout_op=nn.Dropout3d, dropout_op_kwargs=None,
                  nonlin=nn.LeakyReLU, nonlin_kwargs=None, 
@@ -89,7 +89,7 @@ class BasicLayer(nn.Module):
             norm_op_kwargs = {'eps': 1e-5, 'affine': True, 'momentum': 0.1}
 
         self.conv_kwargs = {'stride': 1, 'dilation': 1, 'bias': True}
-
+        self.conv_groups = conv_groups
         self.nonlin = nonlin
         self.nonlin_kwargs = nonlin_kwargs
         self.dropout_op_kwargs = dropout_op_kwargs
@@ -106,11 +106,16 @@ class BasicLayer(nn.Module):
         else:
             self.input_features = self.dim
         self.output_features = self.dim
-    
+        if self.conv_groups:
+            self.conv_kwargs['groups'] = self.output_features if self.input_features >= self.output_features else self.input_features
+        else:
+            self.conv_kwargs['groups'] = 1
+
         self.input_resolution = input_resolution
         self.depth = depth
         self.conv_kwargs['kernel_size'] = self.conv_kernel_sizes[num_stage]
         self.conv_kwargs['padding'] = self.conv_pad_sizes[num_stage]
+        # 
         self.input_du_channels = self.dim
         self.output_du_channels = min(int(base_num_features * feat_map_mul_on_downscale ** (num_stage+1 if is_encoder else num_stage-1)), 
                                         base_num_features*self.max_num_features_factor)
@@ -123,8 +128,6 @@ class BasicLayer(nn.Module):
             
         # build blocks
         if num_stage >= num_only_conv_stage:
-            
-           
             self.swin_blocks = nn.ModuleList([
                 SwinTransformerBlock(dim=self.dim, input_resolution=input_resolution,
                                     num_heads=num_heads, window_size=window_size,
@@ -145,7 +148,7 @@ class BasicLayer(nn.Module):
             #                     'padding': 0,
             #                     'dilation': 1, 
             #                     'bias': True}
-            # self.down_or_upsample = down_or_upsample(self.input_du_channels, self.output_du_channels, conv_op, 
+            # self.down_or_upsample = DownOrUpSample(self.input_du_channels, self.output_du_channels, down_or_upsample, 
             #                             self.du_conv_kwargs, self.norm_op, self.norm_op_kwargs, self.dropout_op, 
             #                             self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs)
             self.down_or_upsample = down_or_upsample(self.input_du_channels,self.output_du_channels,pool_op_kernel_sizes[dowm_stage],
@@ -226,7 +229,7 @@ class ParallellyFusingSwinUnet(SegmentationNetwork):
     """
 
     def __init__(self, img_size, base_num_features, num_classes, num_pool, image_channels=1, num_only_conv_stage=2, num_conv_per_stage=2,
-                 feat_map_mul_on_downscale=2, conv_op=nn.Conv3d,
+                 feat_map_mul_on_downscale=2, conv_op=nn.Conv3d,conv_groups = False,
                  norm_op=nn.BatchNorm2d, norm_op_kwargs=None,
                  dropout_op=nn.Dropout3d, dropout_op_kwargs=None,
                  nonlin=nn.LeakyReLU, nonlin_kwargs=None, deep_supervision=True, 
@@ -285,7 +288,7 @@ class ParallellyFusingSwinUnet(SegmentationNetwork):
                         num_heads=num_heads[i_layer-num_only_conv_stage] if (i_layer >= num_only_conv_stage) else None,
                         window_size=window_size,
                         image_channels=image_channels, num_conv_per_stage=num_conv_per_stage,
-                        conv_op=conv_op,norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op,
+                        conv_op=conv_op,conv_groups =conv_groups,norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op,
                         dropout_op_kwargs=dropout_op_kwargs,nonlin=nonlin, nonlin_kwargs=nonlin_kwargs, 
                         conv_kernel_sizes= conv_kernel_sizes, conv_pad_sizes=self.conv_pad_sizes,pool_op_kernel_sizes=self.pool_op_kernel_sizes,
                         max_num_features_factor = max_num_features_factor,
@@ -313,7 +316,7 @@ class ParallellyFusingSwinUnet(SegmentationNetwork):
                         num_heads=num_heads[i_layer-num_only_conv_stage] if (i_layer >= num_only_conv_stage) else None,
                         window_size=window_size,
                         image_channels=image_channels, num_conv_per_stage=num_conv_per_stage,
-                        conv_op=conv_op,norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op,
+                        conv_op=conv_op,conv_groups = conv_groups, norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op,
                         dropout_op_kwargs=dropout_op_kwargs,nonlin=nonlin, nonlin_kwargs=nonlin_kwargs, 
                         conv_kernel_sizes= conv_kernel_sizes, conv_pad_sizes=self.conv_pad_sizes,pool_op_kernel_sizes=self.pool_op_kernel_sizes,
                         max_num_features_factor = max_num_features_factor,
