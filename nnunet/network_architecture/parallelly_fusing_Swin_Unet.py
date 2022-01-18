@@ -8,6 +8,7 @@
 
 import torch.nn.functional as F
 import torch
+import numpy as np
 # from torch._C import DoubleTensor
 import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
@@ -16,7 +17,51 @@ from nnunet.network_architecture.neural_network import SegmentationNetwork
 from einops import rearrange
 from nnunet.network_architecture.initialization import InitWeights_He
 from nnunet.network_architecture.PFTC_swin3D import *
-from nnunet.network_architecture.PFTC_UNet import *
+
+class ConvDropoutNormNonlin(nn.Module):
+    """
+    fixes a bug in ConvDropoutNormNonlin where lrelu was used regardless of nonlin. Bad.
+    """
+
+    def __init__(self, input_channels, output_channels,
+                 conv_op=nn.Conv3d, conv_kwargs=None,
+                 norm_op=nn.BatchNorm3d, norm_op_kwargs=None,
+                 dropout_op=nn.Dropout3d, dropout_op_kwargs=None,
+                 nonlin=nn.LeakyReLU, nonlin_kwargs=None):
+        super(ConvDropoutNormNonlin, self).__init__()
+        if nonlin_kwargs is None:
+            nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}
+        if dropout_op_kwargs is None:
+            dropout_op_kwargs = {'p': 0.5, 'inplace': True}
+        if norm_op_kwargs is None:
+            norm_op_kwargs = {'eps': 1e-5, 'affine': True, 'momentum': 0.1}
+        if conv_kwargs is None:
+            conv_kwargs = {'kernel_size': 3, 'stride': 1, 'padding': 1, 'dilation': 1, 'bias': True}
+
+        self.nonlin_kwargs = nonlin_kwargs
+        self.nonlin = nonlin
+        self.dropout_op = dropout_op
+        self.dropout_op_kwargs = dropout_op_kwargs
+        self.norm_op_kwargs = norm_op_kwargs
+        self.conv_kwargs = conv_kwargs
+        self.conv_op = conv_op
+        self.norm_op = norm_op
+
+        self.conv = self.conv_op(input_channels, output_channels, **self.conv_kwargs)
+        if self.dropout_op is not None and self.dropout_op_kwargs['p'] is not None and self.dropout_op_kwargs[
+            'p'] > 0:
+            self.dropout = self.dropout_op(**self.dropout_op_kwargs)
+        else:
+            self.dropout = None
+        self.instnorm = self.norm_op(output_channels, **self.norm_op_kwargs)
+        self.lrelu = self.nonlin(**self.nonlin_kwargs)
+
+    def forward(self, x):
+        x = self.conv(x)
+        if self.dropout is not None:
+            x = self.dropout(x)
+        return self.lrelu(self.instnorm(x))
+
 class DownOrUpSample(nn.Module):
     def __init__(self, input_feature_channels, output_feature_channels,
                  conv_op, conv_kwargs,
@@ -120,11 +165,15 @@ class BasicLayer(nn.Module):
         self.output_du_channels = min(int(base_num_features * feat_map_mul_on_downscale ** (num_stage+1 if is_encoder else num_stage-1)), 
                                         base_num_features*self.max_num_features_factor)
             # add convolutions
-        self.conv_blocks = StackedConvLayers(self.input_features, self.output_features, num_conv_per_stage,
-                                                              self.conv_op, self.conv_kwargs, self.norm_op,
-                                                              self.norm_op_kwargs, self.dropout_op,
-                                                              self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs,
-                                                              basic_block=basic_block)
+        self.conv_blocks = nn.Sequential(
+            *([basic_block(self.input_features, self.output_features, self.conv_op,
+                           self.conv_kwargs,
+                           self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs,
+                           self.nonlin, self.nonlin_kwargs)] +
+              [basic_block(self.output_features, self.output_features, self.conv_op,
+                           self.conv_kwargs,
+                           self.norm_op, self.norm_op_kwargs, self.dropout_op, self.dropout_op_kwargs,
+                           self.nonlin, self.nonlin_kwargs) for _ in range(num_conv_per_stage - 1)]))
             
         # build blocks
         if num_stage >= num_only_conv_stage:
@@ -136,7 +185,7 @@ class BasicLayer(nn.Module):
                                     qkv_bias=qkv_bias, qk_scale=qk_scale,
                                     drop=drop, attn_drop=attn_drop,
                                     drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                                    norm_layer=norm_layer)
+                                    norm_layer=norm_layer,last_block = True if i == depth-1 else False)
                 for i in range(depth)])
 
         # patch merging layer
@@ -171,8 +220,8 @@ class BasicLayer(nn.Module):
                 if self.use_checkpoint:
                     s = checkpoint.checkpoint(tblk, s)
                 else:
-                    s = tblk(s)
-            x = x+s
+                    s = tblk(s,x)
+            x = s
         if self.down_or_upsample is not None:
             du = self.down_or_upsample(x)
 
