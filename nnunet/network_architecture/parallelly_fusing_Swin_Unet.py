@@ -145,8 +145,8 @@ class BasicLayer(nn.Module):
         self.conv_kernel_sizes = conv_kernel_sizes
         self.conv_pad_sizes = conv_pad_sizes
         if num_stage == 0 and is_encoder:
-            self.input_features = image_channels  
-        elif not is_encoder and num_stage < num_pool:
+            self.first_conv = nn.conv3d(image_channels,self.dim) 
+        if not is_encoder and num_stage < num_pool:
             self.input_features = 2*self.dim
         else:
             self.input_features = self.dim
@@ -209,6 +209,8 @@ class BasicLayer(nn.Module):
         else:
             self.deep_supervision = None
     def forward(self, x, skip):
+        if self.num_stage == 0 and self.is_encoder:
+            x = self.first_conv(x)
         s = x
         if not self.is_encoder and self.num_stage < self.num_pool:
             x = torch.cat((x, skip), dim=1)
@@ -220,8 +222,8 @@ class BasicLayer(nn.Module):
                 if self.use_checkpoint:
                     s = checkpoint.checkpoint(tblk, s)
                 else:
-                    s = tblk(s,x)
-            x = s
+                    s = tblk(s)
+            x = x + s
         if self.down_or_upsample is not None:
             du = self.down_or_upsample(x)
 
