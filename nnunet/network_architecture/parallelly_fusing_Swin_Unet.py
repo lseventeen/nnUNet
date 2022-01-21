@@ -145,7 +145,7 @@ class BasicLayer(nn.Module):
         self.conv_kernel_sizes = conv_kernel_sizes
         self.conv_pad_sizes = conv_pad_sizes
         if num_stage == 0 and is_encoder:
-            self.first_conv = nn.conv3d(image_channels,self.dim) 
+            self.first_conv = nn.Conv3d(image_channels,self.dim,1) 
         if not is_encoder and num_stage < num_pool:
             self.input_features = 2*self.dim
         else:
@@ -185,7 +185,7 @@ class BasicLayer(nn.Module):
                                     qkv_bias=qkv_bias, qk_scale=qk_scale,
                                     drop=drop, attn_drop=attn_drop,
                                     drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                                    norm_layer=norm_layer,last_block = True if i == depth-1 else False)
+                                    norm_layer=norm_layer)
                 for i in range(depth)])
 
         # patch merging layer
