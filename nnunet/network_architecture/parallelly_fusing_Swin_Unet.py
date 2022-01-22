@@ -145,7 +145,8 @@ class BasicLayer(nn.Module):
         self.conv_kernel_sizes = conv_kernel_sizes
         self.conv_pad_sizes = conv_pad_sizes
         if num_stage == 0 and is_encoder:
-            self.first_conv = nn.Conv3d(image_channels,self.dim,1) 
+            # self.input_features = image_channels
+            self.first_conv = nn.Conv3d(image_channels,self.dim,1,bias=False) 
         if not is_encoder and num_stage < num_pool:
             self.input_features = 2*self.dim
         else:
