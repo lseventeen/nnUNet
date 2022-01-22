@@ -27,7 +27,7 @@ class ConvDropoutNormNonlin(nn.Module):
                  conv_op=nn.Conv3d, conv_kwargs=None,
                  norm_op=nn.BatchNorm3d, norm_op_kwargs=None,
                  dropout_op=nn.Dropout3d, dropout_op_kwargs=None,
-                 nonlin=nn.LeakyReLU, nonlin_kwargs=None):
+                 nonlin=nn.GELU,nonlin_kwargs=None):
         super(ConvDropoutNormNonlin, self).__init__()
         if nonlin_kwargs is None:
             nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}
@@ -54,7 +54,8 @@ class ConvDropoutNormNonlin(nn.Module):
         else:
             self.dropout = None
         self.instnorm = self.norm_op(output_channels, **self.norm_op_kwargs)
-        self.lrelu = self.nonlin(**self.nonlin_kwargs)
+        # self.lrelu = self.nonlin(**self.nonlin_kwargs)
+        self.lrelu = self.nonlin()
 
     def forward(self, x):
         x = self.conv(x)

@@ -162,7 +162,8 @@ class nnUNetTrainerV2(nnUNetTrainer):
 
         norm_op_kwargs = {'eps': 1e-5, 'affine': True}
         dropout_op_kwargs = {'p': 0, 'inplace': True}
-        net_nonlin = nn.LeakyReLU
+        # net_nonlin = nn.LeakyReLU
+        net_nonlin = nn.GELU
         net_nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}
         if self.custom_network is None:
             self.network = Generic_UNet(self.num_input_channels, self.base_num_features, self.num_classes,
