@@ -6,6 +6,7 @@
 # --------------------------------------------------------
 
 
+from audioop import bias
 import torch.nn.functional as F
 import torch
 import numpy as np
@@ -147,7 +148,7 @@ class BasicLayer(nn.Module):
         self.conv_pad_sizes = conv_pad_sizes
         if num_stage == 0 and is_encoder:
             # self.input_features = image_channels
-            self.first_conv = nn.Conv3d(image_channels,self.dim,1,bias=False) 
+            self.first_conv = nn.Conv3d(image_channels,self.dim,1) 
         if not is_encoder and num_stage < num_pool:
             self.input_features = 2*self.dim
         else:
@@ -202,8 +203,10 @@ class BasicLayer(nn.Module):
             # self.down_or_upsample = DownOrUpSample(self.input_du_channels, self.output_du_channels, down_or_upsample, 
             #                             self.du_conv_kwargs, self.norm_op, self.norm_op_kwargs, self.dropout_op, 
             #                             self.dropout_op_kwargs, self.nonlin, self.nonlin_kwargs)
-            self.down_or_upsample = down_or_upsample(self.input_du_channels,self.output_du_channels,pool_op_kernel_sizes[dowm_stage],
-                                    pool_op_kernel_sizes[dowm_stage],bias = False)
+            self.down_or_upsample = nn.Sequential(down_or_upsample(self.input_du_channels,self.output_du_channels,pool_op_kernel_sizes[dowm_stage],
+                                    pool_op_kernel_sizes[dowm_stage],bias=False),
+                                    nn.InstanceNorm3d(self.output_du_channels,**norm_op_kwargs)
+                                    )
         else:
             self.down_or_upsample = None
         if deep_supervision is not None and is_encoder == False:
