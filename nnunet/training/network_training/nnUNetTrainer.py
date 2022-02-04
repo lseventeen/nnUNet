@@ -336,6 +336,10 @@ class nnUNetTrainer(NetworkTrainer):
             self.batch_size = self.custom_batch_size
             self.num_batches_per_epoch = int(self.num_batches_per_epoch // (self.custom_batch_size / stage_plans['batch_size']))
             self.num_val_batches_per_epoch = int(self.num_val_batches_per_epoch // (self.custom_batch_size / stage_plans['batch_size']))
+        elif self.custom_batch_size is not None and self.custom_batch_size < stage_plans['batch_size']:
+            self.batch_size = self.custom_batch_size
+            self.num_batches_per_epoch = int(self.num_batches_per_epoch * (stage_plans['batch_size'] / self.custom_batch_size))
+            self.num_val_batches_per_epoch = int(self.num_val_batches_per_epoch * (stage_plans['batch_size'] / self.custom_batch_size))
         else:
             self.batch_size = stage_plans['batch_size']
         self.net_pool_per_axis = stage_plans['num_pool_per_axis']
@@ -344,10 +348,11 @@ class nnUNetTrainer(NetworkTrainer):
         if (self.custom_network == "nnformer" or self.custom_patch_size==True) and self.task_id == 17:
             self.patch_size = np.array([64,128,128])
 
-
-        elif (self.custom_network == "nnformer" or self.custom_patch_size==True) and self.task_id == 27:   
+        elif self.custom_network == "nnformer" and self.task_id == 27:   
             self.patch_size = np.array([14,160,160])
 
+        elif self.custom_network == "PFTC" and self.task_id == 27:   
+            self.patch_size = np.array([16,256,224])
             
         else:
             self.patch_size = np.array(stage_plans['patch_size']).astype(int)
@@ -356,7 +361,6 @@ class nnUNetTrainer(NetworkTrainer):
                               \n num_val_batches_per_epoch : {self.num_val_batches_per_epoch}")
         self.do_dummy_2D_aug = stage_plans['do_dummy_2D_data_aug']
         
-
         if 'pool_op_kernel_sizes' not in stage_plans.keys():
             assert 'num_pool_per_axis' in stage_plans.keys()
             self.print_to_log_file("WARNING! old plans file with missing pool_op_kernel_sizes. Attempting to fix it...")

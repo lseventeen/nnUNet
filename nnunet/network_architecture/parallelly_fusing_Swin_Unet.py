@@ -49,6 +49,7 @@ class ConvDropoutNormNonlin(nn.Module):
         self.norm_op = norm_op
 
         self.conv = self.conv_op(input_channels, output_channels, **self.conv_kwargs)
+        self.pointwise = nn.Conv3d(output_channels, output_channels, 1, 1)
         if self.dropout_op is not None and self.dropout_op_kwargs['p'] is not None and self.dropout_op_kwargs[
             'p'] > 0:
             self.dropout = self.dropout_op(**self.dropout_op_kwargs)
@@ -59,7 +60,8 @@ class ConvDropoutNormNonlin(nn.Module):
         self.lrelu = self.nonlin()
 
     def forward(self, x):
-        x = self.conv(x)
+        x = self.pointwise(self.conv(x))
+        
         if self.dropout is not None:
             x = self.dropout(x)
         return self.lrelu(self.instnorm(x))
@@ -82,7 +84,90 @@ class DownOrUpSample(nn.Module):
                                         nonlin, nonlin_kwargs)
     def forward(self, x):
         return self.blocks(x)
+class PatchMerging(nn.Module):
+    r""" Patch Merging Layer.
 
+    Args:
+        input_resolution (tuple[int]): Resolution of input feature.
+        dim (int): Number of input channels.
+        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
+    """
+
+    def __init__(self, dim, norm_layer=nn.LayerNorm):
+        super().__init__()
+        # self.input_resolution = input_resolution
+        self.dim = dim
+        self.reduction = nn.Linear(8 * dim, 2 * dim, bias=False)
+        self.norm = norm_layer(8 * dim)
+        # self.reduction = nn.Conv3d(dim,dim*2,kernel_size=2,stride=2)
+    def forward(self, x):
+        """
+        x: B, C, S, H, W 
+        """
+        # S, H, W = self.input_resolution
+        B, C, S, H, W = x.shape
+        # assert L == S * H * W, "input feature has wrong size"
+        assert S % 2 == 0 and H % 2 == 0 and W % 2 == 0, f"x size ({S}*{H}*{W}) are not even."
+
+        # x = x.view(B, S, H, W, C)
+        x = rearrange(x, 'b c (s p1) (h p2) (w p3)  -> b s h w (p1 p2 p3 c)', p1=2, p2=2, p3=2)
+        # x0 = x[:, 0::2, 0::2, 0::2, :]  # B H/2 W/2 C
+        # x1 = x[:, 1::2, 0::2, 0::2, :]  # B H/2 W/2 C
+        # x2 = x[:, 0::2, 1::2, 0::2, :]  # B H/2 W/2 C
+        # x3 = x[:, 1::2, 1::2, :]  # B H/2 W/2 C
+        # x = torch.cat([x0, x1, x2, x3], -1)  # B H/2 W/2 4*C
+        x = x.view(B, -1, 8 * C)  # B H/2*W/2 4*C
+        x = self.reduction(self.norm(x))
+        # x = x.view(B, S, H, W, C)
+        x = rearrange(x, 'b (s h w) c  -> b c s h w', s=S, h=H, w=W)
+        # x = F.gelu(x)
+        # x = self.norm(x)
+        # x=x.permute(0,4,1,2,3)
+        # x=self.reduction(x)
+        # x=x.permute(0,2,3,4,1).view(B,-1,2*C)
+        
+        return x
+
+    def extra_repr(self) -> str:
+        return f"input_resolution={self.input_resolution}, dim={self.dim}"
+
+    def flops(self):
+        H, W = self.input_resolution
+        flops = H * W * self.dim
+        flops += (H // 2) * (W // 2) * 4 * self.dim * 2 * self.dim
+        return flops
+
+class PatchExpand(nn.Module):
+    def __init__(self, dim, norm_layer=nn.LayerNorm):
+        super().__init__()
+        # self.input_resolution = input_resolution
+        self.dim = dim
+        self.expand = nn.Linear(dim // 8, dim//2, bias=False)
+        # self.expand=nn.ConvTranspose3d(dim,dim//2,2,2)
+        self.norm = norm_layer(dim // 8)
+    
+       
+        
+    def forward(self, x):
+        """
+        x: B, H*W, C
+        """
+        S, H, W = self.input_resolution
+        B, C, S, H, W = x.shape
+        # assert L == S * H * W, "input feature has wrong size"   
+
+
+        # x = x.view(B, S, H, W, C)
+        x = rearrange(x, 'b (p1 p2 p3 c) s h w -> b (s p1) (h p2) (w p3) c', p1=2, p2=2, p3=2, c=C//8)
+        x = x.view(B,-1,C//8)
+        x = self.expand(self.norm(x))
+        x = rearrange(x, 'b (s h w) c -> b c s h w', s=S*2, h=H*2, w=W*2)
+        # x = self.norm(x)
+        # x = x.view(B, S, H, W, C)
+        # x=x.permute(0,4,1,2,3)
+        # x = self.expand(x)
+        # x=x.permute(0,2,3,4,1).view(B,-1,C//2)
+        return x
 class DeepSupervision(nn.Module):
     def __init__(self, dim, num_classes):
         super().__init__()
