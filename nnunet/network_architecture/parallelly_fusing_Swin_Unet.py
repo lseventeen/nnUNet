@@ -49,7 +49,7 @@ class ConvDropoutNormNonlin(nn.Module):
         self.norm_op = norm_op
 
         self.conv = self.conv_op(input_channels, output_channels, **self.conv_kwargs)
-        self.pointwise = nn.Conv3d(output_channels, output_channels, 1, 1)
+        # self.pointwise = nn.Conv3d(output_channels, output_channels, 1, 1)
         if self.dropout_op is not None and self.dropout_op_kwargs['p'] is not None and self.dropout_op_kwargs[
             'p'] > 0:
             self.dropout = self.dropout_op(**self.dropout_op_kwargs)
@@ -60,8 +60,8 @@ class ConvDropoutNormNonlin(nn.Module):
         self.lrelu = self.nonlin()
 
     def forward(self, x):
-        x = self.pointwise(self.conv(x))
-        
+        # x = self.pointwise(self.conv(x))
+        x = self.conv(x)
         if self.dropout is not None:
             x = self.dropout(x)
         return self.lrelu(self.instnorm(x))
@@ -240,7 +240,8 @@ class BasicLayer(nn.Module):
             self.input_features = self.dim
         self.output_features = self.dim
         if self.conv_groups:
-            self.conv_kwargs['groups'] = self.output_features if self.input_features >= self.output_features else self.input_features
+            # self.conv_kwargs['groups'] = self.output_features if self.input_features >= self.output_features else self.input_features
+            self.conv_kwargs['groups'] = 9
         else:
             self.conv_kwargs['groups'] = 1
 
