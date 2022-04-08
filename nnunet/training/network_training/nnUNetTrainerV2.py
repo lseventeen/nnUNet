@@ -12,10 +12,9 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-
 from collections import OrderedDict
 from typing import Tuple
-
+from thop import profile,clever_format
 import numpy as np
 import torch
 import wandb
@@ -195,7 +194,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
             print('I am using the pre_train weight!!') 
         elif self.custom_network == "CTPN" and self.task_id == 17:    
             self.network = SwinTransformer_3Dv2(img_size=self.patch_size, patch_size=[2,4,4], in_chans=1, num_classes=14,
-                 embed_dim=192, depths=[2, 2, 2, 2], num_heads=[6, 12, 24, 48],
+                 embed_dim=96, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
                  window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
@@ -203,13 +202,13 @@ class nnUNetTrainerV2(nnUNetTrainer):
         elif self.custom_network == "PFTC" and self.task_id == 17:    
             self.network = ParallellyFusingSwinUnet(img_size = self.patch_size,  base_num_features=24, 
                                     num_classes=self.num_classes, num_pool=len(self.net_num_pool_op_kernel_sizes), image_channels=self.num_input_channels,
-                                    num_only_conv_stage=1,num_conv_per_stage=2,feat_map_mul_on_downscale=2, conv_op=conv_op,conv_groups=False,
+                                    num_only_conv_stage=2,num_conv_per_stage=2,feat_map_mul_on_downscale=2, conv_op=conv_op,conv_groups=False,
                                     norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op, dropout_op_kwargs=dropout_op_kwargs,
                                     nonlin=net_nonlin, nonlin_kwargs=net_nonlin_kwargs, deep_supervision=True,                                                                                      
                                     weightInitializer=InitWeights_He(1e-2), pool_op_kernel_sizes=self.net_num_pool_op_kernel_sizes,
-                                    conv_kernel_sizes=self.net_conv_kernel_sizes, max_num_features_factor=13, depths=[2, 2, 2, 2, 2], num_heads=[1, 3, 6, 12, 24],
+                                    conv_kernel_sizes=self.net_conv_kernel_sizes, max_num_features_factor=13, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
                                     window_size=[3,6,6], mlp_ratio=4., qkv_bias=True, qk_scale=None,drop_rate=0., attn_drop_rate=0., 
-                                    drop_path_rate=0.1,norm_layer=nn.LayerNorm, use_checkpoint=False,)
+                                    drop_path_rate=0.2,norm_layer=nn.LayerNorm, use_checkpoint=False,)
         elif self.custom_network == "PFTC" and self.task_id == 27:    
             self.network = ParallellyFusingSwinUnet(img_size = self.patch_size,  base_num_features=24, 
                                     num_classes=self.num_classes, num_pool=len(self.net_num_pool_op_kernel_sizes), image_channels=self.num_input_channels,
@@ -217,19 +216,23 @@ class nnUNetTrainerV2(nnUNetTrainer):
                                     norm_op=norm_op, norm_op_kwargs=norm_op_kwargs,dropout_op=dropout_op, dropout_op_kwargs=dropout_op_kwargs,
                                     nonlin=net_nonlin, nonlin_kwargs=net_nonlin_kwargs, deep_supervision=True,                                                                                      
                                     weightInitializer=InitWeights_He(1e-2), pool_op_kernel_sizes=self.net_num_pool_op_kernel_sizes,
-                                    conv_kernel_sizes=self.net_conv_kernel_sizes, max_num_features_factor=13, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
+                                    conv_kernel_sizes=self.net_conv_kernel_sizes, max_num_features_factor=None, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
                                     window_size=[2,8,7], mlp_ratio=4., qkv_bias=True, qk_scale=None,drop_rate=0., attn_drop_rate=0., 
-                                    drop_path_rate=0.1,norm_layer=nn.LayerNorm, use_checkpoint=False,)
+                                    drop_path_rate=0.2,norm_layer=nn.LayerNorm, use_checkpoint=False,)
         elif self.custom_network == "cotr" and self.task_id == 17: 
             self.network = ResTranUnet(norm_cfg="IN", activation_cfg="LeakyReLU", img_size=self.plans['plans_per_stage'][1]['patch_size'],
                                  num_classes=self.num_classes, weight_std=False, deep_supervision=True).cuda()
         total = sum([param.nelement() for param in self.network.parameters()])
         print('  + Number of Network Params: %.2f(e6)' % (total / 1e6))
+       
         if torch.cuda.is_available():
             self.network.cuda()
         # wandb.watch(self.network)
         self.network.inference_apply_nonlin = softmax_helper
-
+        # input = torch.randn(1,1, 48, 192, 192).cuda()
+        # macs, params = profile(self.network.cuda(), inputs=(input, ))
+        # macs, params = clever_format([macs, params], "%.3f")
+        # print( macs,params)
     def initialize_optimizer_and_scheduler(self):
         assert self.network is not None, "self.initialize_network must be called first"
         self.optimizer = torch.optim.SGD(self.network.parameters(), self.initial_lr, weight_decay=self.weight_decay,
@@ -310,7 +313,7 @@ class nnUNetTrainerV2(nnUNetTrainer):
             target = to_cuda(target)
 
         self.optimizer.zero_grad()
-
+  
         if self.fp16:
             with autocast():
                 output = self.network(data)
@@ -332,7 +335,6 @@ class nnUNetTrainerV2(nnUNetTrainer):
                 l.backward()
                 torch.nn.utils.clip_grad_norm_(self.network.parameters(), 12)
                 self.optimizer.step()
-
         if run_online_evaluation:
             self.run_online_evaluation(output, target)
 

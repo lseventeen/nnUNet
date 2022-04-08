@@ -644,7 +644,7 @@ class NetworkTrainer(object):
             target = to_cuda(target)
 
         self.optimizer.zero_grad()
-
+       
         if self.fp16:
             with autocast():
                 output = self.network(data)
@@ -663,7 +663,7 @@ class NetworkTrainer(object):
             if do_backprop:
                 l.backward()
                 self.optimizer.step()
-
+        
         if run_online_evaluation:
             self.run_online_evaluation(output, target)
 
