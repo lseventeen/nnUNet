@@ -41,3 +41,17 @@ def create_lists_from_splitted_dataset_folder(folder: str, file_ending: str, ide
         p = re.compile(re.escape(f) + r"_\d\d\d\d" + re.escape(file_ending))
         list_of_lists.append([join(folder, i) for i in files if p.fullmatch(i)])
     return list_of_lists
+
+
+def remove_last_two_directories(directory):
+    # 使用字符串的split()方法将目录字符串分割成目录列表
+    directories = directory.split('/')
+
+    # 删除最后两个目录
+    new_directories = directories[:-2]
+
+    # 使用字符串的join()方法将目录列表重新组合成目录字符串
+    new_directory = '/'.join(new_directories)
+
+    # 返回结果
+    return new_directory

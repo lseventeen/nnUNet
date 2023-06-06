@@ -31,9 +31,9 @@ from nnunetv2.utilities.helpers import empty_cache, dummy_context
 from nnunetv2.utilities.json_export import recursive_fix_for_json_export
 from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
 from nnunetv2.utilities.plans_handling.plans_handler import PlansManager, ConfigurationManager
-from nnunetv2.utilities.utils import create_lists_from_splitted_dataset_folder
-
-
+from nnunetv2.utilities.utils import create_lists_from_splitted_dataset_folder,remove_last_two_directories
+from nnunetv2.utilities.dataset_name_id_conversion import maybe_convert_to_dataset_name
+from nnunetv2.paths import nnUNet_raw
 class nnUNetPredictor(object):
     def __init__(self,
                  tile_step_size: float = 0.5,
@@ -65,33 +65,31 @@ class nnUNetPredictor(object):
         self.perform_everything_on_gpu = perform_everything_on_gpu
 
     def initialize_from_trained_model_folder(self, model_training_output_dir: str,
-                                             use_folds: Union[Tuple[Union[int, str]], None],
-                                             checkpoint_name: str = 'checkpoint_final.pth'):
+                                             f: str,
+                                            experiment_id: str,
+                                            checkpoint_name: str = 'checkpoint_final.pth'):
         """
         This is used when making predictions with a trained model
         """
-        if use_folds is None:
-            use_folds = nnUNetPredictor.auto_detect_available_folds(model_training_output_dir, checkpoint_name)
 
         dataset_json = load_json(join(model_training_output_dir, 'dataset.json'))
         plans = load_json(join(model_training_output_dir, 'plans.json'))
+        
         plans_manager = PlansManager(plans)
 
-        if isinstance(use_folds, str):
-            use_folds = [use_folds]
+       
 
         parameters = []
-        for i, f in enumerate(use_folds):
-            f = int(f) if f != 'all' else f
-            checkpoint = torch.load(join(model_training_output_dir, f'fold_{f}', checkpoint_name),
+        f = int(f[0]) if f != 'all' else f
+        checkpoint = torch.load(join(model_training_output_dir, f'fold_{f}', experiment_id, checkpoint_name),
                                     map_location=torch.device('cpu'))
-            if i == 0:
-                trainer_name = checkpoint['trainer_name']
-                configuration_name = checkpoint['init_args']['configuration']
-                inference_allowed_mirroring_axes = checkpoint['inference_allowed_mirroring_axes'] if \
+           
+        trainer_name = checkpoint['trainer_name']
+        configuration_name = checkpoint['init_args']['configuration']
+        inference_allowed_mirroring_axes = checkpoint['inference_allowed_mirroring_axes'] if \
                     'inference_allowed_mirroring_axes' in checkpoint.keys() else None
 
-            parameters.append(checkpoint['network_weights'])
+        parameters.append(checkpoint['network_weights'])
 
         configuration_manager = plans_manager.get_configuration(configuration_name)
         # restore network
@@ -112,6 +110,54 @@ class nnUNetPredictor(object):
                 and not isinstance(self.network, OptimizedModule):
             print('compiling network')
             self.network = torch.compile(self.network)
+    # def initialize_from_trained_model_folder(self, model_training_output_dir: str,
+    #                                          use_folds: Union[Tuple[Union[int, str]], None],
+    #                                          checkpoint_name: str = 'checkpoint_final.pth'):
+    #     """
+    #     This is used when making predictions with a trained model
+    #     """
+    #     if use_folds is None:
+    #         use_folds = nnUNetPredictor.auto_detect_available_folds(model_training_output_dir, checkpoint_name)
+
+    #     dataset_json = load_json(join(model_training_output_dir, 'dataset.json'))
+    #     plans = load_json(join(model_training_output_dir, 'plans.json'))
+    #     plans_manager = PlansManager(plans)
+
+    #     if isinstance(use_folds, str):
+    #         use_folds = [use_folds]
+
+    #     parameters = []
+    #     for i, f in enumerate(use_folds):
+    #         f = int(f) if f != 'all' else f
+    #         checkpoint = torch.load(join(model_training_output_dir, f'fold_{f}', checkpoint_name),
+    #                                 map_location=torch.device('cpu'))
+    #         if i == 0:
+    #             trainer_name = checkpoint['trainer_name']
+    #             configuration_name = checkpoint['init_args']['configuration']
+    #             inference_allowed_mirroring_axes = checkpoint['inference_allowed_mirroring_axes'] if \
+    #                 'inference_allowed_mirroring_axes' in checkpoint.keys() else None
+
+    #         parameters.append(checkpoint['network_weights'])
+
+    #     configuration_manager = plans_manager.get_configuration(configuration_name)
+    #     # restore network
+    #     num_input_channels = determine_num_input_channels(plans_manager, configuration_manager, dataset_json)
+    #     trainer_class = recursive_find_python_class(join(nnunetv2.__path__[0], "training", "nnUNetTrainer"),
+    #                                                 trainer_name, 'nnunetv2.training.nnUNetTrainer')
+    #     network = trainer_class.build_network_architecture(plans_manager, dataset_json, configuration_manager,
+    #                                                        num_input_channels, enable_deep_supervision=False)
+    #     self.plans_manager = plans_manager
+    #     self.configuration_manager = configuration_manager
+    #     self.list_of_parameters = parameters
+    #     self.network = network
+    #     self.dataset_json = dataset_json
+    #     self.trainer_name = trainer_name
+    #     self.allowed_mirroring_axes = inference_allowed_mirroring_axes
+    #     self.label_manager = plans_manager.get_label_manager(dataset_json)
+    #     if ('nnUNet_compile' in os.environ.keys()) and (os.environ['nnUNet_compile'].lower() in ('true', '1', 't')) \
+    #             and not isinstance(self.network, OptimizedModule):
+    #         print('compiling network')
+    #         self.network = torch.compile(self.network)
 
     def manual_initialization(self, network: nn.Module, plans_manager: PlansManager,
                               configuration_manager: ConfigurationManager, parameters: Optional[List[dict]],
@@ -735,10 +781,10 @@ def predict_entry_point():
                                                  'you want to manually specify a folder containing a trained nnU-Net '
                                                  'model. This is useful when the nnunet environment variables '
                                                  '(nnUNet_results) are not set.')
-    parser.add_argument('-i', type=str, required=True,
+    parser.add_argument('-i', type=str, required=False, default= None,
                         help='input folder. Remember to use the correct channel numberings for your files (_0000 etc). '
                              'File endings must be the same as the training dataset!')
-    parser.add_argument('-o', type=str, required=True,
+    parser.add_argument('-o', type=str, required=False, default= None,
                         help='Output folder. If it does not exist it will be created. Predicted segmentations will '
                              'have the same name as their source images.')
     parser.add_argument('-d', type=str, required=True,
@@ -748,12 +794,14 @@ def predict_entry_point():
                              'Default: nnUNetPlans')
     parser.add_argument('-tr', type=str, required=False, default='nnUNetTrainer',
                         help='What nnU-Net trainer class was used for training? Default: nnUNetTrainer')
-    parser.add_argument('-c', type=str, required=True,
+    parser.add_argument('-c', type=str, required=False,default= '3d_fullres',
                         help='nnU-Net configuration that should be used for prediction. Config must be located '
                              'in the plans specified with -p')
     parser.add_argument('-f', nargs='+', type=str, required=False, default=(0, 1, 2, 3, 4),
                         help='Specify the folds of the trained model that should be used for prediction. '
                              'Default: (0, 1, 2, 3, 4)')
+    parser.add_argument('-ei','--experiment_id', type=str, required=False, default="nn-UNet",
+                        help='Experiment id')
     parser.add_argument('-step_size', type=float, required=False, default=0.5,
                         help='Step size for sliding window prediction. The larger it is the faster but less accurate '
                              'the prediction. Default: 0.5. Cannot be larger than 1. We recommend the default.')
@@ -799,11 +847,13 @@ def predict_entry_point():
 
     args = parser.parse_args()
     args.f = [i if i == 'all' else int(i) for i in args.f]
+    input_folder = join(nnUNet_raw, maybe_convert_to_dataset_name(args.d),"imagesTs") if args.i == None else args.i
+    model_folder = get_output_folder(args.d, args.tr, args.p, args.c) 
+    output_folder = join(model_folder,args.chk.split('.')[0]) if args.o == None else args.o if args.o == None else args.o
+    
 
-    model_folder = get_output_folder(args.d, args.tr, args.p, args.c)
-
-    if not isdir(args.o):
-        maybe_mkdir_p(args.o)
+    if not isdir(output_folder):
+        maybe_mkdir_p(output_folder)
 
     # slightly passive agressive haha
     assert args.part_id < args.num_parts, 'Do you even read the documentation? See nnUNetv2_predict -h.'
@@ -833,9 +883,10 @@ def predict_entry_point():
     predictor.initialize_from_trained_model_folder(
         model_folder,
         args.f,
+        args.experiment_id,
         checkpoint_name=args.chk
     )
-    predictor.predict_from_files(args.i, args.o, save_probabilities=args.save_probabilities,
+    predictor.predict_from_files(input_folder, output_folder, save_probabilities=args.save_probabilities,
                                  overwrite=not args.continue_prediction,
                                  num_processes_preprocessing=args.npp,
                                  num_processes_segmentation_export=args.nps,
@@ -863,36 +914,40 @@ def predict_entry_point():
 
 
 if __name__ == '__main__':
+    predict_entry_point()
+
+
+
     # predict a bunch of files
-    from nnunetv2.paths import nnUNet_results, nnUNet_raw
-    predictor = nnUNetPredictor(
-        tile_step_size=0.5,
-        use_gaussian=True,
-        use_mirroring=True,
-        perform_everything_on_gpu=True,
-        device=torch.device('cuda', 0),
-        verbose=False,
-        verbose_preprocessing=False,
-        allow_tqdm=True
-        )
-    predictor.initialize_from_trained_model_folder(
-        join(nnUNet_results, 'Dataset003_Liver/nnUNetTrainer__nnUNetPlans__3d_lowres'),
-        use_folds=(0, ),
-        checkpoint_name='checkpoint_final.pth',
-    )
-    predictor.predict_from_files(join(nnUNet_raw, 'Dataset003_Liver/imagesTs'),
-                                 join(nnUNet_raw, 'Dataset003_Liver/imagesTs_predlowres'),
-                                 save_probabilities=False, overwrite=False,
-                                 num_processes_preprocessing=2, num_processes_segmentation_export=2,
-                                 folder_with_segs_from_prev_stage=None, num_parts=1, part_id=0)
+    # from nnunetv2.paths import nnUNet_results, nnUNet_raw
+    # predictor = nnUNetPredictor(
+    #     tile_step_size=0.5,
+    #     use_gaussian=True,
+    #     use_mirroring=True,
+    #     perform_everything_on_gpu=True,
+    #     device=torch.device('cuda', 0),
+    #     verbose=False,
+    #     verbose_preprocessing=False,
+    #     allow_tqdm=True
+    #     )
+    # predictor.initialize_from_trained_model_folder(
+    #     join(nnUNet_results, 'Dataset003_Liver/nnUNetTrainer__nnUNetPlans__3d_lowres'),
+    #     use_folds=(0, ),
+    #     checkpoint_name='checkpoint_final.pth',
+    # )
+    # predictor.predict_from_files(join(nnUNet_raw, 'Dataset003_Liver/imagesTs'),
+    #                              join(nnUNet_raw, 'Dataset003_Liver/imagesTs_predlowres'),
+    #                              save_probabilities=False, overwrite=False,
+    #                              num_processes_preprocessing=2, num_processes_segmentation_export=2,
+    #                              folder_with_segs_from_prev_stage=None, num_parts=1, part_id=0)
 
-    # predict a numpy array
-    from nnunetv2.imageio.simpleitk_reader_writer import SimpleITKIO
-    img, props = SimpleITKIO().read_images([join(nnUNet_raw, 'Dataset003_Liver/imagesTr/liver_63_0000.nii.gz')])
-    ret = predictor.predict_single_npy_array(img, props, None, None, False)
+    # # predict a numpy array
+    # from nnunetv2.imageio.simpleitk_reader_writer import SimpleITKIO
+    # img, props = SimpleITKIO().read_images([join(nnUNet_raw, 'Dataset003_Liver/imagesTr/liver_63_0000.nii.gz')])
+    # ret = predictor.predict_single_npy_array(img, props, None, None, False)
 
-    iterator = predictor.get_data_iterator_from_raw_npy_data([img], None, [props], None, 1)
-    ret = predictor.predict_from_data_iterator(iterator, False, 1)
+    # iterator = predictor.get_data_iterator_from_raw_npy_data([img], None, [props], None, 1)
+    # ret = predictor.predict_from_data_iterator(iterator, False, 1)
 
 
     # predictor = nnUNetPredictor(

@@ -8,7 +8,7 @@ from copy import deepcopy
 from datetime import datetime
 from time import time, sleep
 from typing import Union, Tuple, List
-
+import wandb
 import numpy as np
 import torch
 from batchgenerators.dataloading.single_threaded_augmenter import SingleThreadedAugmenter
@@ -65,7 +65,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 
 class nnUNetTrainer(object):
-    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict, unpack_dataset: bool = True,
+    def __init__(self, plans: dict, configuration: str, experiment_id: str, fold: int, dataset_json: dict, unpack_dataset: bool = True, 
                  device: torch.device = torch.device('cuda')):
         # From https://grugbrain.dev/. Worth a read ya big brains ;-)
 
@@ -121,7 +121,7 @@ class nnUNetTrainer(object):
         self.output_folder_base = join(nnUNet_results, self.plans_manager.dataset_name,
                                        self.__class__.__name__ + '__' + self.plans_manager.plans_name + "__" + configuration) \
             if nnUNet_results is not None else None
-        self.output_folder = join(self.output_folder_base, f'fold_{fold}')
+        self.output_folder = join(self.output_folder_base, f'fold_{fold}', experiment_id)
 
         self.preprocessed_dataset_folder = join(self.preprocessed_dataset_folder_base,
                                                 self.configuration_manager.data_identifier)
@@ -142,7 +142,7 @@ class nnUNetTrainer(object):
         self.oversample_foreground_percent = 0.33
         self.num_iterations_per_epoch = 250
         self.num_val_iterations_per_epoch = 50
-        self.num_epochs = 1000
+        self.num_epochs = 2
         self.current_epoch = 0
 
         ### Dealing with labels/regions
@@ -1022,6 +1022,14 @@ class nnUNetTrainer(object):
 
         if self.local_rank == 0:
             self.logger.plot_progress_png(self.output_folder)
+            wandb.log({
+                "train_loss": self.logger.my_fantastic_logging['train_losses'][-1], 
+                "loss_val": self.logger.my_fantastic_logging['val_losses'][-1],
+                "Pseudo dice":self.logger.my_fantastic_logging['mean_fg_dice'][-1],
+                "pseudo dice (mov. avg.)": self.logger.my_fantastic_logging['ema_fg_dice'][-1],
+                "learning rate": self.logger.my_fantastic_logging['lrs'][-1],
+                "epoch duration": self.logger.my_fantastic_logging['epoch_end_timestamps'][-1] - self.logger.my_fantastic_logging['epoch_start_timestamps'][-1]
+                })
 
         self.current_epoch += 1
 

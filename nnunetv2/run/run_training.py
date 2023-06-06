@@ -13,7 +13,8 @@ from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
 from nnunetv2.utilities.dataset_name_id_conversion import maybe_convert_to_dataset_name
 from nnunetv2.utilities.find_class_by_name import recursive_find_python_class
 from torch.backends import cudnn
-
+from datetime import datetime
+import wandb
 
 def find_free_network_port() -> int:
     """Finds a free port on localhost.
@@ -30,6 +31,7 @@ def find_free_network_port() -> int:
 
 def get_trainer_from_args(dataset_name_or_id: Union[int, str],
                           configuration: str,
+                          experiment_id: str, 
                           fold: int,
                           trainer_name: str = 'nnUNetTrainer',
                           plans_identifier: str = 'nnUNetPlans',
@@ -62,7 +64,7 @@ def get_trainer_from_args(dataset_name_or_id: Union[int, str],
     plans_file = join(preprocessed_dataset_folder_base, plans_identifier + '.json')
     plans = load_json(plans_file)
     dataset_json = load_json(join(preprocessed_dataset_folder_base, 'dataset.json'))
-    nnunet_trainer = nnunet_trainer(plans=plans, configuration=configuration, fold=fold,
+    nnunet_trainer = nnunet_trainer(plans=plans, configuration=configuration,experiment_id = experiment_id, fold=fold,
                                     dataset_json=dataset_json, unpack_dataset=not use_compressed, device=device)
     return nnunet_trainer
 
@@ -107,11 +109,11 @@ def cleanup_ddp():
     dist.destroy_process_group()
 
 
-def run_ddp(rank, dataset_name_or_id, configuration, fold, tr, p, use_compressed, disable_checkpointing, c, val, pretrained_weights, npz, world_size):
+def run_ddp(rank, dataset_name_or_id, configuration, experiment_id, fold, tr, p, use_compressed, disable_checkpointing, c, val, pretrained_weights, npz, world_size):
     setup_ddp(rank, world_size)
     torch.cuda.set_device(torch.device('cuda', dist.get_rank()))
 
-    nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, fold, tr, p,
+    nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, experiment_id, fold, tr, p,
                                            use_compressed)
 
     if disable_checkpointing:
@@ -134,6 +136,9 @@ def run_ddp(rank, dataset_name_or_id, configuration, fold, tr, p, use_compressed
 
 def run_training(dataset_name_or_id: Union[str, int],
                  configuration: str, fold: Union[int, str],
+                 experiment_tag: str,
+                 wandb_mode: str = "offline",
+                 exist_experiment_id: str = None,
                  trainer_class_name: str = 'nnUNetTrainer',
                  plans_identifier: str = 'nnUNetPlans',
                  pretrained_weights: Optional[str] = None,
@@ -151,6 +156,8 @@ def run_training(dataset_name_or_id: Union[str, int],
             except ValueError as e:
                 print(f'Unable to convert given value for fold to int: {fold}. fold must bei either "all" or an integer!')
                 raise e
+    experiment_id = f"{experiment_tag}_{datetime.now().strftime('%y%m%d_%H%M%S')}" if exist_experiment_id is None else exist_experiment_id
+    wandb.init(project=dataset_name_or_id, name=experiment_id, mode=wandb_mode)
 
     if num_gpus > 1:
         assert device.type == 'cuda', f"DDP training (triggered by num_gpus > 1) is only implemented for cuda devices. Your device: {device}"
@@ -165,6 +172,7 @@ def run_training(dataset_name_or_id: Union[str, int],
                  args=(
                      dataset_name_or_id,
                      configuration,
+                     experiment_id,
                      fold,
                      trainer_class_name,
                      plans_identifier,
@@ -178,7 +186,7 @@ def run_training(dataset_name_or_id: Union[str, int],
                  nprocs=num_gpus,
                  join=True)
     else:
-        nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, fold, trainer_class_name,
+        nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, experiment_id, fold, trainer_class_name,
                                                plans_identifier, use_compressed_data, device=device)
 
         if disable_checkpointing:
@@ -207,6 +215,12 @@ def run_training_entry():
                         help="Configuration that should be trained")
     parser.add_argument('fold', type=str,
                         help='Fold of the 5-fold cross-validation. Should be an int between 0 and 4.')
+    parser.add_argument('-wm', '--wandb_mode', type=str, required=False, default="offline",
+                        help='Wandb mode, online or offline.')
+    parser.add_argument('-et','--experiment_tag', type=str, required=False, default="nn-UNet",
+                        help='Experiment tag')
+    parser.add_argument('-eei','--exist_experiment_id', type=str, required=False, default=None,
+                        help='import exist experiment id for continue training')
     parser.add_argument('-tr', type=str, required=False, default='nnUNetTrainer',
                         help='[OPTIONAL] Use this flag to specify a custom trainer. Default: nnUNetTrainer')
     parser.add_argument('-p', type=str, required=False, default='nnUNetPlans',
@@ -250,9 +264,10 @@ def run_training_entry():
     else:
         device = torch.device('mps')
 
-    run_training(args.dataset_name_or_id, args.configuration, args.fold, args.tr, args.p, args.pretrained_weights,
+    run_training(args.dataset_name_or_id, args.configuration,args.fold,args.experiment_tag, args.wandb_mode, args.exist_experiment_id,  args.tr, args.p, args.pretrained_weights,
                  args.num_gpus, args.use_compressed, args.npz, args.c, args.val, args.disable_checkpointing,
                  device=device)
+
 
 
 if __name__ == '__main__':
