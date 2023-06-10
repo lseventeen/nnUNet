@@ -80,7 +80,7 @@ class nnUNetPredictor(object):
        
 
         parameters = []
-        f = int(f[0]) if f != 'all' else f
+        f = int(f[0]) if f[0] != 'all' else "all"
         checkpoint = torch.load(join(model_training_output_dir, f'fold_{f}', experiment_id, checkpoint_name),
                                     map_location=torch.device('cpu'))
            
@@ -849,7 +849,7 @@ def predict_entry_point():
     args.f = [i if i == 'all' else int(i) for i in args.f]
     input_folder = join(nnUNet_raw, maybe_convert_to_dataset_name(args.d),"imagesTs") if args.i == None else args.i
     model_folder = get_output_folder(args.d, args.tr, args.p, args.c) 
-    output_folder = join(model_folder,args.chk.split('.')[0]) if args.o == None else args.o if args.o == None else args.o
+    output_folder = join(model_folder,f"fold_{args.f[0]}",args.experiment_id,args.chk.split('.')[0],) if args.o == None else args.o if args.o == None else args.o
     
 
     if not isdir(output_folder):
