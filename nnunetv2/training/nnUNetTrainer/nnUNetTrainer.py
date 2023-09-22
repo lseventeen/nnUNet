@@ -204,8 +204,7 @@ class nnUNetTrainer(object):
                                                            self.num_input_channels,
                                                            enable_deep_supervision=True).to(self.device)
             # compile network for free speedup
-            if ('nnUNet_compile' in os.environ.keys()) and (
-                    os.environ['nnUNet_compile'].lower() in ('true', '1', 't')):
+            if self._do_i_compile():
                 self.print_to_log_file('Compiling network...')
                 self.network = torch.compile(self.network)
 
@@ -220,6 +219,9 @@ class nnUNetTrainer(object):
         else:
             raise RuntimeError("You have called self.initialize even though the trainer was already initialized. "
                                "That should not happen.")
+
+    def _do_i_compile(self):
+        return ('nnUNet_compile' in os.environ.keys()) and (os.environ['nnUNet_compile'].lower() in ('true', '1', 't'))
 
     def _save_debug_information(self):
         # saving some debug information
@@ -462,6 +464,10 @@ class nnUNetTrainer(object):
         return optimizer, lr_scheduler
 
     def plot_network_architecture(self):
+        if self._do_i_compile():
+            self.print_to_log_file("Unable to plot network architecture: nnUNet_compile is enabled!")
+            return
+
         if self.local_rank == 0:
             try:
                 # raise NotImplementedError('hiddenlayer no longer works and we do not have a viable alternative :-(')
@@ -823,7 +829,12 @@ class nnUNetTrainer(object):
         # print(f"oversample: {self.oversample_foreground_percent}")
 
     def on_train_end(self):
+        # dirty hack because on_epoch_end increments the epoch counter and this is executed afterwards.
+        # This will lead to the wrong current epoch to be stored
+        self.current_epoch -= 1
         self.save_checkpoint(join(self.output_folder, "checkpoint_final.pth"))
+        self.current_epoch += 1
+
         # now we can delete latest
         if self.local_rank == 0 and isfile(join(self.output_folder, "checkpoint_latest.pth")):
             os.remove(join(self.output_folder, "checkpoint_latest.pth"))
