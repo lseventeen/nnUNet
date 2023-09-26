@@ -52,7 +52,7 @@ from nnunetv2.training.lr_scheduler.polylr import PolyLRScheduler
 from nnunetv2.utilities.collate_outputs import collate_outputs
 from nnunetv2.utilities.default_n_proc_DA import get_allowed_n_proc_DA
 from nnunetv2.utilities.file_path_utilities import check_workers_alive_and_busy
-from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
+from nnunetv2.utilities.get_network_from_plans import get_network_from_plans, get_custom_network_from_plans
 from nnunetv2.utilities.helpers import empty_cache, dummy_context
 from nnunetv2.utilities.label_handling.label_handling import convert_labelmap_to_one_hot, determine_num_input_channels
 from nnunetv2.utilities.plans_handling.plans_handler import PlansManager, ConfigurationManager
@@ -65,7 +65,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 
 class nnUNetTrainer(object):
-    def __init__(self, plans: dict, configuration: str, experiment_id: str, fold: int, dataset_json: dict, unpack_dataset: bool = True, 
+    def __init__(self, plans: dict, configuration: str, experiment_id: str, custom_network: str, fold: int, dataset_json: dict, unpack_dataset: bool = True, 
                  device: torch.device = torch.device('cuda')):
         # From https://grugbrain.dev/. Worth a read ya big brains ;-)
 
@@ -144,6 +144,7 @@ class nnUNetTrainer(object):
         self.num_val_iterations_per_epoch = 50
         self.num_epochs = 1000
         self.current_epoch = 0
+        self.custom_network = custom_network
 
         ### Dealing with labels/regions
         self.label_manager = self.plans_manager.get_label_manager(dataset_json)
@@ -199,7 +200,7 @@ class nnUNetTrainer(object):
             self.num_input_channels = determine_num_input_channels(self.plans_manager, self.configuration_manager,
                                                                    self.dataset_json)
 
-            self.network = self.build_network_architecture(self.plans_manager, self.dataset_json,
+            self.network = self.build_network_architecture(self.plans_manager, self.custom_network,self.dataset_json,
                                                            self.configuration_manager,
                                                            self.num_input_channels,
                                                            enable_deep_supervision=True).to(self.device)
@@ -260,6 +261,7 @@ class nnUNetTrainer(object):
 
     @staticmethod
     def build_network_architecture(plans_manager: PlansManager,
+                                   custom_network,
                                    dataset_json,
                                    configuration_manager: ConfigurationManager,
                                    num_input_channels,
@@ -283,6 +285,12 @@ class nnUNetTrainer(object):
         should be generated. label_manager takes care of all that for you.)
 
         """
+    
+        if custom_network is not None:
+            return get_custom_network_from_plans(custom_network,
+                                                 plans_manager, dataset_json, configuration_manager,
+                                      num_input_channels, deep_supervision=enable_deep_supervision)
+
         return get_network_from_plans(plans_manager, dataset_json, configuration_manager,
                                       num_input_channels, deep_supervision=enable_deep_supervision)
 
@@ -781,10 +789,19 @@ class nnUNetTrainer(object):
         This function is specific for the default architecture in nnU-Net. If you change the architecture, there are
         chances you need to change this as well!
         """
-        if self.is_ddp:
-            self.network.module.decoder.deep_supervision = enabled
+        if self.custom_network is None:
+            if self.is_ddp:
+                self.network.module.decoder.deep_supervision = enabled
+
+            else:
+                self.network.decoder.deep_supervision = enabled
         else:
-            self.network.decoder.deep_supervision = enabled
+            if self.is_ddp:
+                self.network.module.deep_supervision = enabled
+
+            else:
+                self.network.deep_supervision = enabled
+
 
     def on_train_start(self):
         if not self.was_initialized:

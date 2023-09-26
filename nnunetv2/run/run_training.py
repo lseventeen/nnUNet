@@ -32,6 +32,7 @@ def find_free_network_port() -> int:
 def get_trainer_from_args(dataset_name_or_id: Union[int, str],
                           configuration: str,
                           experiment_id: str, 
+                          custom_network: str,
                           fold: int,
                           trainer_name: str = 'nnUNetTrainer',
                           plans_identifier: str = 'nnUNetPlans',
@@ -64,7 +65,7 @@ def get_trainer_from_args(dataset_name_or_id: Union[int, str],
     plans_file = join(preprocessed_dataset_folder_base, plans_identifier + '.json')
     plans = load_json(plans_file)
     dataset_json = load_json(join(preprocessed_dataset_folder_base, 'dataset.json'))
-    nnunet_trainer = nnunet_trainer(plans=plans, configuration=configuration,experiment_id = experiment_id, fold=fold,
+    nnunet_trainer = nnunet_trainer(plans=plans, configuration=configuration,experiment_id = experiment_id, custom_network = custom_network, fold=fold,
                                     dataset_json=dataset_json, unpack_dataset=not use_compressed, device=device)
     return nnunet_trainer
 
@@ -109,11 +110,11 @@ def cleanup_ddp():
     dist.destroy_process_group()
 
 
-def run_ddp(rank, dataset_name_or_id, configuration, experiment_id, fold, tr, p, use_compressed, disable_checkpointing, c, val, pretrained_weights, npz,val_with_best, world_size):
+def run_ddp(rank, dataset_name_or_id, configuration, experiment_id, custom_network, fold, tr, p, use_compressed, disable_checkpointing, c, val, pretrained_weights, npz,val_with_best, world_size):
     setup_ddp(rank, world_size)
     torch.cuda.set_device(torch.device('cuda', dist.get_rank()))
 
-    nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, experiment_id, fold, tr, p,
+    nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, experiment_id, custom_network, fold, tr, p,
                                            use_compressed)
 
     if disable_checkpointing:
@@ -139,6 +140,7 @@ def run_ddp(rank, dataset_name_or_id, configuration, experiment_id, fold, tr, p,
 def run_training(dataset_name_or_id: Union[str, int],
                  configuration: str, fold: Union[int, str],
                  experiment_tag: str,
+                 custom_network: str = None,
                  wandb_mode: str = "offline",
                  exist_experiment_id: str = None,
                  trainer_class_name: str = 'nnUNetTrainer',
@@ -179,6 +181,7 @@ def run_training(dataset_name_or_id: Union[str, int],
                      dataset_name_or_id,
                      configuration,
                      experiment_id,
+                     custom_network,
                      fold,
                      trainer_class_name,
                      plans_identifier,
@@ -193,7 +196,7 @@ def run_training(dataset_name_or_id: Union[str, int],
                  nprocs=num_gpus,
                  join=True)
     else:
-        nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, experiment_id, fold, trainer_class_name,
+        nnunet_trainer = get_trainer_from_args(dataset_name_or_id, configuration, experiment_id, custom_network, fold, trainer_class_name,
                                                plans_identifier, use_compressed_data, device=device)
 
         if disable_checkpointing:
@@ -228,6 +231,8 @@ def run_training_entry():
                         help='Wandb mode, online or offline.')
     parser.add_argument('-et','--experiment_tag', type=str, required=False, default="nn-UNet",
                         help='Experiment tag')
+    parser.add_argument('-cn','--custom_network', type=str, required=False, default=None,
+                        help='Custom network')
     parser.add_argument('-eei','--exist_experiment_id', type=str, required=False, default=None,
                         help='import exist experiment id for continue training')
     parser.add_argument('-tr', type=str, required=False, default='nnUNetTrainer',
@@ -278,7 +283,7 @@ def run_training_entry():
     else:
         device = torch.device('mps')
 
-    run_training(args.dataset_name_or_id, args.configuration,args.fold,args.experiment_tag, args.wandb_mode, args.exist_experiment_id,  args.tr, args.p, args.pretrained_weights,
+    run_training(args.dataset_name_or_id, args.configuration,args.fold,args.experiment_tag, args.custom_network, args.wandb_mode, args.exist_experiment_id,  args.tr, args.p, args.pretrained_weights,
                  args.num_gpus, args.use_compressed, args.npz, args.c, args.val, args.disable_checkpointing, args.val_best,
                  device=device)
 

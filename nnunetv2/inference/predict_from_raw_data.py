@@ -83,7 +83,7 @@ class nnUNetPredictor(object):
         f = int(f[0]) if f[0] != 'all' else "all"
         checkpoint = torch.load(join(model_training_output_dir, f'fold_{f}', experiment_id, checkpoint_name),
                                     map_location=torch.device('cpu'))
-           
+        custom_network = checkpoint['init_args']['custom_network']
         trainer_name = checkpoint['trainer_name']
         configuration_name = checkpoint['init_args']['configuration']
         inference_allowed_mirroring_axes = checkpoint['inference_allowed_mirroring_axes'] if \
@@ -96,7 +96,7 @@ class nnUNetPredictor(object):
         num_input_channels = determine_num_input_channels(plans_manager, configuration_manager, dataset_json)
         trainer_class = recursive_find_python_class(join(nnunetv2.__path__[0], "training", "nnUNetTrainer"),
                                                     trainer_name, 'nnunetv2.training.nnUNetTrainer')
-        network = trainer_class.build_network_architecture(plans_manager, dataset_json, configuration_manager,
+        network = trainer_class.build_network_architecture(plans_manager, custom_network,dataset_json, configuration_manager,
                                                            num_input_channels, enable_deep_supervision=False)
         self.plans_manager = plans_manager
         self.configuration_manager = configuration_manager

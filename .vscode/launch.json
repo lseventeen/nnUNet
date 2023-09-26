@@ -15,26 +15,28 @@
                 "CUDA_VISIBLE_DEVICES": "0"
             },
             "args": [
-                // "163",
+                "-d",
+                "231",
                 // "3d_fullres",
-                //  "0", 
+                "-f",
+                 "0", 
                 //  "--npz",
                 // "-et", 
-                // "test"
+                // "test",
+                // "-cn",
+                // "PHTrans"
                 // "--verify_dataset_integrity",
                 // "offline"
                 // "-mp",
                 //  "save_pth/FR_UNet_l1_u30_sda_230315_161559/ite_1_student/"
 
 
-                "-d", 
-                "163",
-                "-f",
-                "all",
-                // "0",
+            
                 "-ei",
-                // "test_230606_141922" 
-                "nnunet_baseline_230607_130029"
+                "phtrans_230924_231304"
+                // // "test_230606_141922" 
+                // "nnunet_baseline_230607_130029"
+        
             ]
         }
     ]
