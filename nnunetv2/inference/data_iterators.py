@@ -28,7 +28,7 @@ def preprocess_fromfiles_save_to_queue(list_of_lists: List[List[str]],
         label_manager = plans_manager.get_label_manager(dataset_json)
         preprocessor = configuration_manager.preprocessor_class(verbose=verbose)
         for idx in range(len(list_of_lists)):
-            data, seg, data_properites = preprocessor.run_case(list_of_lists[idx],
+            data, seg, data_properties = preprocessor.run_case(list_of_lists[idx],
                                                                list_of_segs_from_prev_stage_files[
                                                                    idx] if list_of_segs_from_prev_stage_files is not None else None,
                                                                plans_manager,
@@ -38,9 +38,9 @@ def preprocess_fromfiles_save_to_queue(list_of_lists: List[List[str]],
                 seg_onehot = convert_labelmap_to_one_hot(seg[0], label_manager.foreground_labels, data.dtype)
                 data = np.vstack((data, seg_onehot))
 
-            data = torch.from_numpy(data).contiguous().float()
+            data = torch.from_numpy(data).to(dtype=torch.float32, memory_format=torch.contiguous_format)
 
-            item = {'data': data, 'data_properites': data_properites,
+            item = {'data': data, 'data_properties': data_properties,
                     'ofile': output_filenames_truncated[idx] if output_filenames_truncated is not None else None}
             success = False
             while not success:
@@ -53,6 +53,7 @@ def preprocess_fromfiles_save_to_queue(list_of_lists: List[List[str]],
                     pass
         done_event.set()
     except Exception as e:
+        # print(Exception, e)
         abort_event.set()
         raise e
 
@@ -99,6 +100,7 @@ def preprocessing_iterator_fromfiles(list_of_lists: List[List[str]],
 
     worker_ctr = 0
     while (not done_events[worker_ctr].is_set()) or (not target_queues[worker_ctr].empty()):
+        # import IPython;IPython.embed()
         if not target_queues[worker_ctr].empty():
             item = target_queues[worker_ctr].get()
             worker_ctr = (worker_ctr + 1) % num_processes
@@ -115,6 +117,7 @@ def preprocessing_iterator_fromfiles(list_of_lists: List[List[str]],
             [i.pin_memory() for i in item.values() if isinstance(i, torch.Tensor)]
         yield item
     [p.join() for p in processes]
+
 
 class PreprocessAdapter(DataLoader):
     def __init__(self, list_of_lists: List[List[str]],
@@ -144,13 +147,11 @@ class PreprocessAdapter(DataLoader):
 
     def generate_train_batch(self):
         idx = self.get_indices()[0]
-        files = self._data[idx][0]
-        seg_prev_stage = self._data[idx][1]
-        ofile = self._data[idx][2]
+        files, seg_prev_stage, ofile = self._data[idx]
         # if we have a segmentation from the previous stage we have to process it together with the images so that we
         # can crop it appropriately (if needed). Otherwise it would just be resized to the shape of the data after
         # preprocessing and then there might be misalignments
-        data, seg, data_properites = self.preprocessor.run_case(files, seg_prev_stage, self.plans_manager,
+        data, seg, data_properties = self.preprocessor.run_case(files, seg_prev_stage, self.plans_manager,
                                                                 self.configuration_manager,
                                                                 self.dataset_json)
         if seg_prev_stage is not None:
@@ -159,7 +160,7 @@ class PreprocessAdapter(DataLoader):
 
         data = torch.from_numpy(data)
 
-        return {'data': data, 'data_properites': data_properites, 'ofile': ofile}
+        return {'data': data, 'data_properties': data_properties, 'ofile': ofile}
 
 
 class PreprocessAdapterFromNpy(DataLoader):
@@ -190,10 +191,7 @@ class PreprocessAdapterFromNpy(DataLoader):
 
     def generate_train_batch(self):
         idx = self.get_indices()[0]
-        image = self._data[idx][0]
-        seg_prev_stage = self._data[idx][1]
-        props = self._data[idx][2]
-        ofname = self._data[idx][3]
+        image, seg_prev_stage, props, ofname = self._data[idx]
         # if we have a segmentation from the previous stage we have to process it together with the images so that we
         # can crop it appropriately (if needed). Otherwise it would just be resized to the shape of the data after
         # preprocessing and then there might be misalignments
@@ -207,7 +205,7 @@ class PreprocessAdapterFromNpy(DataLoader):
 
         data = torch.from_numpy(data)
 
-        return {'data': data, 'data_properites': props, 'ofile': ofname}
+        return {'data': data, 'data_properties': props, 'ofile': ofname}
 
 
 def preprocess_fromnpy_save_to_queue(list_of_images: List[np.ndarray],
@@ -236,9 +234,9 @@ def preprocess_fromnpy_save_to_queue(list_of_images: List[np.ndarray],
                 seg_onehot = convert_labelmap_to_one_hot(seg[0], label_manager.foreground_labels, data.dtype)
                 data = np.vstack((data, seg_onehot))
 
-            data = torch.from_numpy(data).contiguous().float()
+            data = torch.from_numpy(data).to(dtype=torch.float32, memory_format=torch.contiguous_format)
 
-            item = {'data': data, 'data_properites': list_of_image_properties[idx],
+            item = {'data': data, 'data_properties': list_of_image_properties[idx],
                     'ofile': truncated_ofnames[idx] if truncated_ofnames is not None else None}
             success = False
             while not success:

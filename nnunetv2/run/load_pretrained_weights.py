@@ -1,6 +1,7 @@
 import torch
 from torch._dynamo import OptimizedModule
 from torch.nn.parallel import DistributedDataParallel as DDP
+import torch.distributed as dist
 
 
 def load_pretrained_weights(network, fname, verbose=False):
@@ -9,13 +10,16 @@ def load_pretrained_weights(network, fname, verbose=False):
     shape is also the same. Segmentation layers (the 1x1(x1) layers that produce the segmentation maps)
     identified by keys ending with '.seg_layers') are not transferred!
 
-    If the pretrained weights were optained with a training outside nnU-Net and DDP or torch.optimize was used,
+    If the pretrained weights were obtained with a training outside nnU-Net and DDP or torch.optimize was used,
     you need to change the keys of the pretrained state_dict. DDP adds a 'module.' prefix and torch.optim adds
     '_orig_mod'. You DO NOT need to worry about this if pretraining was done with nnU-Net as
     nnUNetTrainer.save_checkpoint takes care of that!
 
     """
-    saved_model = torch.load(fname)
+    if dist.is_initialized():
+        saved_model = torch.load(fname, map_location=torch.device('cuda', dist.get_rank()))
+    else:
+        saved_model = torch.load(fname)
     pretrained_dict = saved_model['network_weights']
 
     skip_strings_in_pretrained = [

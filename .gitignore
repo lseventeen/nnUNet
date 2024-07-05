@@ -113,6 +113,10 @@ ENV/
 
 *.model
 
+<<<<<<< HEAD
 wandb/
 evaluation_results/
 *.pt
+=======
+!documentation/assets/scribble_example.png
+>>>>>>> fee8c2db4a52405389eb5d3c4512bd2f654ab999
