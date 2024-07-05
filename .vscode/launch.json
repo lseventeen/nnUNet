@@ -16,14 +16,16 @@
             },
             "args": [
                 "-d",
-                "231",
-                // "3d_fullres",
+                "230",
+                // "3d_fullres"
                 "-f",
                  "0", 
                 //  "--npz",
                 // "-et", 
                 // "test",
                 // "-cn",
+                // "cotr",
+                // "UNETR"
                 // "PHTrans"
                 // "--verify_dataset_integrity",
                 // "offline"
@@ -33,7 +35,13 @@
 
             
                 "-ei",
-                "phtrans_230924_231304"
+                "nnunet_230924_145918",
+                // "nnunet_231009_162310",
+                // "-i",
+                // "/ai/data/data/kejibu/changhai/sanfenzhi/CTA/images",
+                // "-o",
+                // "/ai/data/data/kejibu/changhai/sanfenzhi/CTA/labels"
+                // "phtrans_230924_231304"
                 // // "test_230606_141922" 
                 // "nnunet_baseline_230607_130029"
         

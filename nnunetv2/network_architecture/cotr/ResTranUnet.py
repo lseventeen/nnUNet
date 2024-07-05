@@ -183,7 +183,7 @@ class ResTranUnet(nn.Module):
     """
     def __init__(self, norm_cfg='BN', activation_cfg='ReLU', img_size=None, num_classes=None, weight_std=False, deep_supervision=False):
         super().__init__()
-        self.do_ds = False
+        # self.do_ds = False
         self.U_ResTran3D = U_ResTran3D(norm_cfg, activation_cfg, img_size, num_classes, weight_std) # U_ResTran3D
 
         if weight_std==False:
@@ -200,12 +200,12 @@ class ResTranUnet(nn.Module):
             self.norm_op = nn.InstanceNorm3d
         self.dropout_op = nn.Dropout3d
         self.num_classes = num_classes
-        self._deep_supervision = deep_supervision
-        self.do_ds = deep_supervision
+        self.deep_supervision = deep_supervision
+        # self.do_ds = deep_supervision
 
     def forward(self, x):
         seg_output = self.U_ResTran3D(x)
-        if self._deep_supervision and self.do_ds:
+        if self.deep_supervision:
             return seg_output
         else:
             return seg_output[0]

@@ -145,7 +145,7 @@ def get_custom_network_from_plans(custom_network: str,
         dropout_path_rate=0,
         use_checkpoint=True,
         )
-        weight = torch.load("/home/admin/nvme8t/code/PHTransV2/PHTrans/pretrain_model/model_swinvit.pt")
+        weight = torch.load("/ai/code/nnUNet/nnunetv2/network_architecture/pretrain_model/model_swinvit.pt")
         model.load_from(weights=weight)
         print("Using pretrained self-supervied Swin UNETR backbone weights !")
 

@@ -32,7 +32,7 @@ class nnUNetTrainerNoDeepSupervision(nnUNetTrainer):
             self.num_input_channels = determine_num_input_channels(self.plans_manager, self.configuration_manager,
                                                                    self.dataset_json)
 
-            self.network = self.build_network_architecture(self.plans_manager, self.dataset_json,
+            self.network = self.build_network_architecture(self.plans_manager, self.custom_network,self.dataset_json,
                                                            self.configuration_manager,
                                                            self.num_input_channels,
                                                            enable_deep_supervision=False).to(self.device)

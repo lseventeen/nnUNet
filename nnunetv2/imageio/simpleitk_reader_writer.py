@@ -38,7 +38,7 @@ class SimpleITKIO(BaseReaderWriter):
             spacings.append(itk_image.GetSpacing())
             origins.append(itk_image.GetOrigin())
             directions.append(itk_image.GetDirection())
-            npy_image = sitk.GetArrayFromImage(itk_image)
+            npy_image = sitk.GetArrayFromImage(itk_image)           
             if len(npy_image.shape) == 2:
                 # 2d
                 npy_image = npy_image[None, None]

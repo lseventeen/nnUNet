@@ -39,8 +39,13 @@ def get_trainer_from_args(dataset_name_or_id: Union[int, str],
                           use_compressed: bool = False,
                           device: torch.device = torch.device('cuda')):
     # load nnunet class and do sanity checks
-    nnunet_trainer = recursive_find_python_class(join(nnunetv2.__path__[0], "training", "nnUNetTrainer"),
+    if custom_network in ['UNETR','3DUXNET','Swin_UNETR']:
+        nnunet_trainer = recursive_find_python_class(join(nnunetv2.__path__[0], "training", "nnUNetTrainer","variants","network_architecture"),
+                                                'nnUNetTrainerNoDeepSupervision', 'nnunetv2.training.nnUNetTrainer.variants.network_architecture')
+    else:
+        nnunet_trainer = recursive_find_python_class(join(nnunetv2.__path__[0], "training", "nnUNetTrainer"),
                                                 trainer_name, 'nnunetv2.training.nnUNetTrainer')
+    
     if nnunet_trainer is None:
         raise RuntimeError(f'Could not find requested nnunet trainer {trainer_name} in '
                            f'nnunetv2.training.nnUNetTrainer ('

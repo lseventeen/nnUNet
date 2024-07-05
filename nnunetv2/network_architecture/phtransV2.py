@@ -7,7 +7,7 @@ import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, trunc_normal_
 from nnunetv2.network_architecture.init import InitWeights
 from einops import rearrange
-from .swin_3D_flare import *
+from .swin_3D import *
 
 
 class ConvBlock(nn.Module):
@@ -206,7 +206,7 @@ class PHTrans(nn.Module):
         # nonlin = nn.LeakyReLU 
         # nonlin_kwargs = {'negative_slope': 1e-2, 'inplace': True}
         max_num_features = base_num_features*10
-        self.do_ds = deep_supervision
+        self.deep_supervision = deep_supervision
         
         self.num_pool = len(pool_op_kernel_sizes)
         window_size = torch.tensor(img_size)
@@ -306,9 +306,9 @@ class PHTrans(nn.Module):
         out = []
         for i, layer in enumerate(self.up_layers):
             x = layer(x, x_skip[-(i+1)]) 
-            if self.do_ds:
+            if self.deep_supervision:
                 out.append(x)
-        if self.do_ds:
+        if self.deep_supervision:
             ds = []
             for i in range(len(out)):
                 ds.append(self.seg_outputs[i](out[-(i+1)])) 

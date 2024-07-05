@@ -114,3 +114,6 @@ ENV/
 *.model
 
 wandb/
+evaluation_results/
+.vscode/
+*.pt
