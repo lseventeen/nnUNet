@@ -27,13 +27,13 @@ def key_to_label_or_region(key: str):
     except ValueError:
         key = key.replace('(', '')
         key = key.replace(')', '')
-        splitted = key.split(',')
-        return tuple([int(i) for i in splitted if len(i) > 0])
+        split = key.split(',')
+        return tuple([int(i) for i in split if len(i) > 0])
 
 
 def save_summary_json(results: dict, output_file: str):
     """
-    stupid json does not support tuples as keys (why does it have to be so shitty) so we need to convert that shit
+    json does not support tuples as keys (why does it have to be so shitty) so we need to convert that shit
     ourselves
     """
     results_converted = deepcopy(results)
@@ -92,7 +92,6 @@ def compute_metrics(reference_file: str, prediction_file: str, image_reader_writ
     # load images
     seg_ref, seg_ref_dict = image_reader_writer.read_seg(reference_file)
     seg_pred, seg_pred_dict = image_reader_writer.read_seg(prediction_file)
-    # spacing = seg_ref_dict['spacing']
 
     ignore_mask = seg_ref == ignore_label if ignore_label is not None else None
 
@@ -136,7 +135,7 @@ def compute_metrics_on_folder(folder_ref: str, folder_pred: str, output_file: st
     files_ref = subfiles(folder_ref, suffix=file_ending, join=False)
     if not chill:
         present = [isfile(join(folder_pred, i)) for i in files_ref]
-        assert all(present), "Not all files in folder_pred exist in folder_ref"
+        assert all(present), "Not all files in folder_ref exist in folder_pred"
     files_ref = [join(folder_ref, i) for i in files_pred]
     files_pred = [join(folder_pred, i) for i in files_pred]
     with multiprocessing.get_context("spawn").Pool(num_processes) as pool:
@@ -227,7 +226,7 @@ def evaluate_folder_entry_point():
                         help='Output file. Optional. Default: pred_folder/summary.json')
     parser.add_argument('-np', type=int, required=False, default=default_num_processes,
                         help=f'number of processes used. Optional. Default: {default_num_processes}')
-    parser.add_argument('--chill', action='store_true', help='dont crash if folder_pred doesnt have all files that are present in folder_gt')
+    parser.add_argument('--chill', action='store_true', help='dont crash if folder_pred does not have all files that are present in folder_gt')
     args = parser.parse_args()
     compute_metrics_on_folder2(args.gt_folder, args.pred_folder, args.djfile, args.pfile, args.o, args.np, chill=args.chill)
 
@@ -245,7 +244,7 @@ def evaluate_simple_entry_point():
                         help='Output file. Optional. Default: pred_folder/summary.json')
     parser.add_argument('-np', type=int, required=False, default=default_num_processes,
                         help=f'number of processes used. Optional. Default: {default_num_processes}')
-    parser.add_argument('--chill', action='store_true', help='dont crash if folder_pred doesnt have all files that are present in folder_gt')
+    parser.add_argument('--chill', action='store_true', help='dont crash if folder_pred does not have all files that are present in folder_gt')
 
     args = parser.parse_args()
     compute_metrics_on_folder_simple(args.gt_folder, args.pred_folder, args.l, args.o, args.np, args.il, chill=args.chill)

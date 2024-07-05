@@ -23,7 +23,8 @@ class SimpleITKIO(BaseReaderWriter):
     supported_file_endings = [
         '.nii.gz',
         '.nrrd',
-        '.mha'
+        '.mha',
+        '.gipl'
     ]
 
     def read_images(self, image_fnames: Union[List[str], Tuple[str, ...]]) -> Tuple[np.ndarray, dict]:
@@ -38,22 +39,27 @@ class SimpleITKIO(BaseReaderWriter):
             spacings.append(itk_image.GetSpacing())
             origins.append(itk_image.GetOrigin())
             directions.append(itk_image.GetDirection())
+<<<<<<< HEAD
             npy_image = sitk.GetArrayFromImage(itk_image)           
             if len(npy_image.shape) == 2:
+=======
+            npy_image = sitk.GetArrayFromImage(itk_image)
+            if npy_image.ndim == 2:
+>>>>>>> fee8c2db4a52405389eb5d3c4512bd2f654ab999
                 # 2d
                 npy_image = npy_image[None, None]
                 max_spacing = max(spacings[-1])
                 spacings_for_nnunet.append((max_spacing * 999, *list(spacings[-1])[::-1]))
-            elif len(npy_image.shape) == 3:
+            elif npy_image.ndim == 3:
                 # 3d, as in original nnunet
                 npy_image = npy_image[None]
                 spacings_for_nnunet.append(list(spacings[-1])[::-1])
-            elif len(npy_image.shape) == 4:
+            elif npy_image.ndim == 4:
                 # 4d, multiple modalities in one file
                 spacings_for_nnunet.append(list(spacings[-1])[::-1][1:])
                 pass
             else:
-                raise RuntimeError("Unexpected number of dimensions: %d in file %s" % (len(npy_image.shape), f))
+                raise RuntimeError(f"Unexpected number of dimensions: {npy_image.ndim} in file {f}")
 
             images.append(npy_image)
             spacings_for_nnunet[-1] = list(np.abs(spacings_for_nnunet[-1]))
@@ -78,7 +84,7 @@ class SimpleITKIO(BaseReaderWriter):
             print(origins)
             print('Image files:')
             print(image_fnames)
-            print('It is up to you to decide whether that\'s a problem. You should run nnUNet_plot_dataset_pngs to verify '
+            print('It is up to you to decide whether that\'s a problem. You should run nnUNetv2_plot_overlay_pngs to verify '
                   'that segmentations and data overlap.')
         if not self._check_all_same(directions):
             print('WARNING! Not all input images have the same direction!')
@@ -86,7 +92,7 @@ class SimpleITKIO(BaseReaderWriter):
             print(directions)
             print('Image files:')
             print(image_fnames)
-            print('It is up to you to decide whether that\'s a problem. You should run nnUNet_plot_dataset_pngs to verify '
+            print('It is up to you to decide whether that\'s a problem. You should run nnUNetv2_plot_overlay_pngs to verify '
                   'that segmentations and data overlap.')
         if not self._check_all_same(spacings_for_nnunet):
             print('ERROR! Not all input images have the same spacing_for_nnunet! (This should not happen and must be a '
@@ -97,7 +103,6 @@ class SimpleITKIO(BaseReaderWriter):
             print(image_fnames)
             raise RuntimeError()
 
-        stacked_images = np.vstack(images)
         dict = {
             'sitk_stuff': {
                 # this saves the sitk geometry information. This part is NOT used by nnU-Net!
@@ -109,21 +114,21 @@ class SimpleITKIO(BaseReaderWriter):
             # are returned x,y,z but spacing is returned z,y,x. Duh.
             'spacing': spacings_for_nnunet[0]
         }
-        return stacked_images.astype(np.float32), dict
+        return np.vstack(images, dtype=np.float32, casting='unsafe'), dict
 
     def read_seg(self, seg_fname: str) -> Tuple[np.ndarray, dict]:
         return self.read_images((seg_fname, ))
 
     def write_seg(self, seg: np.ndarray, output_fname: str, properties: dict) -> None:
-        assert len(seg.shape) == 3, 'segmentation must be 3d. If you are exporting a 2d segmentation, please provide it as shape 1,x,y'
+        assert seg.ndim == 3, 'segmentation must be 3d. If you are exporting a 2d segmentation, please provide it as shape 1,x,y'
         output_dimension = len(properties['sitk_stuff']['spacing'])
         assert 1 < output_dimension < 4
         if output_dimension == 2:
             seg = seg[0]
 
-        itk_image = sitk.GetImageFromArray(seg.astype(np.uint8))
+        itk_image = sitk.GetImageFromArray(seg.astype(np.uint8, copy=False))
         itk_image.SetSpacing(properties['sitk_stuff']['spacing'])
         itk_image.SetOrigin(properties['sitk_stuff']['origin'])
         itk_image.SetDirection(properties['sitk_stuff']['direction'])
 
-        sitk.WriteImage(itk_image, output_fname)
+        sitk.WriteImage(itk_image, output_fname, True)

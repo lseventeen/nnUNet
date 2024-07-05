@@ -1,15 +1,9 @@
-import torch
-from torch import autocast
-
-from nnunetv2.training.loss.compound_losses import DC_and_BCE_loss, DC_and_CE_loss
-from nnunetv2.training.loss.dice import get_tp_fp_fn_tn, MemoryEfficientSoftDiceLoss
 from nnunetv2.training.nnUNetTrainer.nnUNetTrainer import nnUNetTrainer
-from nnunetv2.utilities.helpers import dummy_context
-from nnunetv2.utilities.label_handling.label_handling import determine_num_input_channels
-from torch.nn.parallel import DistributedDataParallel as DDP
+import torch
 
 
 class nnUNetTrainerNoDeepSupervision(nnUNetTrainer):
+<<<<<<< HEAD
     def _build_loss(self):
         if self.label_manager.has_regions:
             loss = DC_and_BCE_loss({},
@@ -112,3 +106,16 @@ class nnUNetTrainerNoDeepSupervision(nnUNetTrainer):
             fn_hard = fn_hard[1:]
 
         return {'loss': l.detach().cpu().numpy(), 'tp_hard': tp_hard, 'fp_hard': fp_hard, 'fn_hard': fn_hard}
+=======
+    def __init__(
+        self,
+        plans: dict,
+        configuration: str,
+        fold: int,
+        dataset_json: dict,
+        unpack_dataset: bool = True,
+        device: torch.device = torch.device("cuda"),
+    ):
+        super().__init__(plans, configuration, fold, dataset_json, unpack_dataset, device)
+        self.enable_deep_supervision = False
+>>>>>>> fee8c2db4a52405389eb5d3c4512bd2f654ab999

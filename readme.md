@@ -4,6 +4,13 @@ Click [here](https://github.com/MIC-DKFZ/nnUNet/tree/nnunetv1) if you were looki
 
 Coming from V1? Check out the [TLDR Migration Guide](documentation/tldr_migration_guide_from_v1.md). Reading the rest of the documentation is still strongly recommended ;-)
 
+## **2024-04-18 UPDATE: New residual encoder UNet presets available!**
+Residual encoder UNet presets substantially improve segmentation performance.
+They ship for a variety of GPU memory targets. It's all awesome stuff, promised! 
+Read more :point_right: [here](documentation/resenc_presets.md) :point_left:
+
+Also check out our [new paper](https://arxiv.org/pdf/2404.09556.pdf) on systematically benchmarking recent developments in medical image segmentation. You might be surprised!
+
 # What is nnU-Net?
 Image datasets are enormously diverse: image dimensionality (2D, 3D), modalities/input channels (RGB image, CT, MRI, microscopy, ...), 
 image sizes, voxel sizes, class ratio, target structure properties and more change substantially between datasets. 
@@ -88,6 +95,7 @@ Read these:
 - [Usage instructions](documentation/how_to_use_nnunet.md)
 
 Additional information:
+- [Learning from sparse annotations (scribbles, slices)](documentation/ignore_label.md)
 - [Region-based training](documentation/region_based_training.md)
 - [Manual data splits](documentation/manual_data_splits.md)
 - [Pretraining and finetuning](documentation/pretraining_and_finetuning.md)
@@ -96,9 +104,12 @@ Additional information:
 - [Extending nnU-Net](documentation/extending_nnunet.md)
 - [What is different in V2?](documentation/changelog.md)
 
+Competitions:
+- [AutoPET II](documentation/competitions/AutoPETII.md)
+
 [//]: # (- [Ignore label]&#40;documentation/ignore_label.md&#41;)
 
-## Where does nnU-net perform well and where does it not perform?
+## Where does nnU-Net perform well and where does it not perform?
 nnU-Net excels in segmentation problems that need to be solved by training from scratch, 
 for example: research applications that feature non-standard image modalities and input channels,
 challenge datasets from the biomedical domain, majority of 3D segmentation problems, etc . We have yet to find a 
